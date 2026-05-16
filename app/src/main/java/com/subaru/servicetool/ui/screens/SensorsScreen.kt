@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.List
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -27,7 +27,7 @@ fun SensorsScreen(paddingValues: PaddingValues = PaddingValues()) {
         verticalArrangement = Arrangement.Center
     ) {
         Icon(
-            imageVector = Icons.Filled.List,
+            imageVector = Icons.AutoMirrored.Filled.List,
             contentDescription = null,
             tint = MaterialTheme.colorScheme.primary,
             modifier = Modifier.height(64.dp)

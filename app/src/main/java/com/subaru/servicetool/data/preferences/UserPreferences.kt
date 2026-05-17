@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.subaru.servicetool.data.bluetooth.OBDConnectionType
 import com.subaru.servicetool.data.model.VehicleDatabase
 import com.subaru.servicetool.data.model.VehicleSpec
 import kotlinx.coroutines.flow.Flow
@@ -22,6 +23,8 @@ class UserPreferences @Inject constructor(
         private val KEY_SELECTED_YEAR    = intPreferencesKey("selected_year")
         private val KEY_SELECTED_MODEL   = stringPreferencesKey("selected_model")
         private val KEY_SELECTED_ENGINE  = stringPreferencesKey("selected_engine_code")
+        private val KEY_LAST_DEVICE_MAC  = stringPreferencesKey("last_device_mac")
+        private val KEY_LAST_DEVICE_TYPE = stringPreferencesKey("last_device_type")
     }
 
     val isOnboardingComplete: Flow<Boolean> = dataStore.data.map { prefs ->
@@ -35,12 +38,23 @@ class UserPreferences @Inject constructor(
         VehicleDatabase.findVehicle(year, model, engine)
     }
 
+    val lastDeviceMac: Flow<String?> = dataStore.data.map { it[KEY_LAST_DEVICE_MAC] }
+
+    val lastDeviceType: Flow<String?> = dataStore.data.map { it[KEY_LAST_DEVICE_TYPE] }
+
     suspend fun saveVehicle(vehicle: VehicleSpec) {
         dataStore.edit { prefs ->
             prefs[KEY_ONBOARDING_DONE] = true
             prefs[KEY_SELECTED_YEAR]   = vehicle.year
             prefs[KEY_SELECTED_MODEL]  = vehicle.modelName
             prefs[KEY_SELECTED_ENGINE] = vehicle.engineCode
+        }
+    }
+
+    suspend fun saveLastDevice(mac: String, type: OBDConnectionType) {
+        dataStore.edit { prefs ->
+            prefs[KEY_LAST_DEVICE_MAC]  = mac
+            prefs[KEY_LAST_DEVICE_TYPE] = type.name
         }
     }
 }

@@ -26,6 +26,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.subaru.servicetool.ui.bluetooth.BluetoothSettingsScreen
 import com.subaru.servicetool.ui.main.MainViewModel
 import com.subaru.servicetool.ui.onboarding.OnboardingScreen
 import com.subaru.servicetool.ui.dashboard.DashboardScreen
@@ -87,13 +88,19 @@ private fun MainNavHost() {
         },
     ) { innerPadding ->
         NavHost(navController = navController, startDestination = Screen.Dashboard.route) {
-            composable(Screen.Dashboard.route) { DashboardScreen(innerPadding) }
+            composable(Screen.Dashboard.route) {
+                DashboardScreen(
+                    paddingValues = innerPadding,
+                    onNavigateToBluetooth = { navController.navigate("bluetooth_settings") },
+                )
+            }
             composable(Screen.Sensors.route)   { SensorsScreen(innerPadding) }
             composable(Screen.Service.route)   { ServiceScreen(innerPadding) }
             composable(Screen.Settings.route)  {
                 SettingsScreen(
-                    paddingValues    = innerPadding,
-                    onChangeVehicle = { navController.navigate("vehicle_picker") },
+                    paddingValues     = innerPadding,
+                    onChangeVehicle   = { navController.navigate("vehicle_picker") },
+                    onOpenBluetooth   = { navController.navigate("bluetooth_settings") },
                 )
             }
             composable("vehicle_picker") {
@@ -101,6 +108,9 @@ private fun MainNavHost() {
                     isChangingVehicle = true,
                     onComplete = { navController.popBackStack() },
                 )
+            }
+            composable("bluetooth_settings") {
+                BluetoothSettingsScreen(onBack = { navController.popBackStack() })
             }
         }
     }

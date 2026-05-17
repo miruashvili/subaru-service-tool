@@ -14,6 +14,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Button
@@ -37,6 +39,7 @@ import com.subaru.servicetool.data.model.VehicleSpec
 fun SettingsScreen(
     paddingValues: PaddingValues = PaddingValues(),
     onChangeVehicle: () -> Unit = {},
+    onOpenBluetooth: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val vehicle by viewModel.selectedVehicle.collectAsState()
@@ -96,6 +99,51 @@ fun SettingsScreen(
                     Spacer(Modifier.width(8.dp))
                     Text("Change Vehicle", style = MaterialTheme.typography.labelLarge)
                 }
+            }
+        }
+
+        Spacer(Modifier.height(24.dp))
+
+        // ── Bluetooth section ─────────────────────────────────────────────
+        Text(
+            text = "BLUETOOTH",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.SemiBold,
+        )
+
+        Spacer(Modifier.height(8.dp))
+
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth(),
+            onClick = onOpenBluetooth,
+        ) {
+            Row(
+                modifier = Modifier.padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    Icons.Filled.Bluetooth,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp),
+                )
+                Spacer(Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("OBD Adapter", style = MaterialTheme.typography.titleSmall)
+                    Text(
+                        "Pair and connect your Bluetooth OBD adapter",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(0.6f),
+                    )
+                }
+                Icon(
+                    Icons.Filled.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface.copy(0.4f),
+                )
             }
         }
 

@@ -52,6 +52,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -73,9 +74,14 @@ import com.subaru.servicetool.ui.theme.DarkWarning
 @Composable
 fun DashboardScreen(
     paddingValues: PaddingValues = PaddingValues(),
+    onNavigateToBluetooth: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
+
+    LaunchedEffect(Unit) {
+        viewModel.navigateToBluetooth.collect { onNavigateToBluetooth() }
+    }
 
     Column(
         modifier = Modifier
@@ -96,9 +102,9 @@ fun DashboardScreen(
 
         // ── OBD connection card ───────────────────────────────────────────
         ObdConnectionCard(
-            state = state,
-            onConnect = viewModel::connect,
-            onDisconnect = viewModel::disconnect,
+            state          = state,
+            onConnect      = viewModel::connect,
+            onDisconnect   = viewModel::disconnect,
         )
 
         // ── Metrics grid ──────────────────────────────────────────────────
@@ -191,11 +197,14 @@ private fun ObdConnectionCard(
     onDisconnect: () -> Unit,
 ) {
     val cs = state.connectionState
+    val connLabel = if (state.connectedDeviceName != null) "Connected · ${state.connectedDeviceName}"
+                    else "OBD Connected"
     val (cardColor, dotColor, label) = when (cs) {
         ObdConnectionState.DISCONNECTED -> Triple(MaterialTheme.colorScheme.surface, DarkError.copy(0.7f), "OBD Disconnected")
         ObdConnectionState.CONNECTING   -> Triple(MaterialTheme.colorScheme.surface, DarkWarning, "Connecting…")
-        ObdConnectionState.CONNECTED    -> Triple(MaterialTheme.colorScheme.surface, DarkSuccess, "OBD Connected")
-        ObdConnectionState.ERROR        -> Triple(MaterialTheme.colorScheme.surface, DarkError, "Connection Failed")
+        ObdConnectionState.CONNECTED    -> Triple(MaterialTheme.colorScheme.surface, DarkSuccess, connLabel)
+        ObdConnectionState.ERROR        -> Triple(MaterialTheme.colorScheme.surface, DarkError,
+            state.errorMessage?.let { "Error: $it" } ?: "Connection Failed")
     }
 
     Surface(

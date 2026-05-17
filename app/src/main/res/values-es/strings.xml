@@ -22,6 +22,7 @@
     <string name="sensor_rel_throttle">Pos. Acelerador Relativa</string>
     <string name="sensor_abs_load">Carga Absoluta</string>
     <string name="sensor_run_time">Tiempo de Marcha</string>
+    <string name="sensor_oil_temp">Temp. Aceite Motor</string>
 
     <string name="group_engine">MOTOR</string>
     <string name="group_temperatures">TEMPERATURAS</string>

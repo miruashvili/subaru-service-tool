@@ -22,6 +22,7 @@
     <string name="sensor_rel_throttle">Pos. Papillon Relative</string>
     <string name="sensor_abs_load">Charge Absolue</string>
     <string name="sensor_run_time">Durée de Marche</string>
+    <string name="sensor_oil_temp">Temp. Huile Moteur</string>
 
     <string name="group_engine">MOTEUR</string>
     <string name="group_temperatures">TEMPÉRATURES</string>

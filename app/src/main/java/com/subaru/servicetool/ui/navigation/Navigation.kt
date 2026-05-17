@@ -1,5 +1,10 @@
 package com.subaru.servicetool.ui.navigation
 
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
@@ -46,6 +51,14 @@ sealed class Screen(val route: String, val labelRes: Int, val icon: ImageVector)
 private val bottomNavItems = listOf(Screen.Dashboard, Screen.Sensors, Screen.Service, Screen.Settings)
 private val tabRoutes      = bottomNavItems.map { it.route }.toSet()
 
+private val tabEnter = fadeIn(tween(300))
+private val tabExit  = fadeOut(tween(300))
+
+private val slideEnter     = slideInHorizontally(tween(300))  { it } + fadeIn(tween(300))
+private val slideExit      = slideOutHorizontally(tween(250)) { it } + fadeOut(tween(200))
+private val slidePopEnter  = slideInHorizontally(tween(300))  { -it } + fadeIn(tween(300))
+private val slidePopExit   = slideOutHorizontally(tween(250)) { it } + fadeOut(tween(200))
+
 @Composable
 fun AppNavigation() {
     val mainViewModel: MainViewModel = hiltViewModel()
@@ -73,10 +86,10 @@ private fun MainNavHost() {
                     val currentDest = navBackStack?.destination
                     bottomNavItems.forEach { screen ->
                         NavigationBarItem(
-                            icon    = { Icon(screen.icon, contentDescription = stringResource(screen.labelRes)) },
-                            label   = { Text(stringResource(screen.labelRes)) },
+                            icon     = { Icon(screen.icon, contentDescription = stringResource(screen.labelRes)) },
+                            label    = { Text(stringResource(screen.labelRes)) },
                             selected = currentDest?.hierarchy?.any { it.route == screen.route } == true,
-                            onClick = {
+                            onClick  = {
                                 navController.navigate(screen.route) {
                                     popUpTo(navController.graph.findStartDestination().id) { saveState = true }
                                     launchSingleTop = true
@@ -89,29 +102,65 @@ private fun MainNavHost() {
             }
         },
     ) { innerPadding ->
-        NavHost(navController = navController, startDestination = Screen.Dashboard.route) {
-            composable(Screen.Dashboard.route) {
+        NavHost(
+            navController = navController,
+            startDestination = Screen.Dashboard.route,
+        ) {
+            // ── Bottom-nav tabs: crossfade ─────────────────────────────────
+            composable(
+                Screen.Dashboard.route,
+                enterTransition = { tabEnter },
+                exitTransition  = { tabExit },
+            ) {
                 DashboardScreen(
                     paddingValues = innerPadding,
                     onNavigateToBluetooth = { navController.navigate("bluetooth_settings") },
                 )
             }
-            composable(Screen.Sensors.route)   { SensorsScreen(innerPadding) }
-            composable(Screen.Service.route)   { ServiceScreen(innerPadding) }
-            composable(Screen.Settings.route)  {
+            composable(
+                Screen.Sensors.route,
+                enterTransition = { tabEnter },
+                exitTransition  = { tabExit },
+            ) { SensorsScreen(innerPadding) }
+
+            composable(
+                Screen.Service.route,
+                enterTransition = { tabEnter },
+                exitTransition  = { tabExit },
+            ) { ServiceScreen(innerPadding) }
+
+            composable(
+                Screen.Settings.route,
+                enterTransition = { tabEnter },
+                exitTransition  = { tabExit },
+            ) {
                 SettingsScreen(
-                    paddingValues     = innerPadding,
-                    onChangeVehicle   = { navController.navigate("vehicle_picker") },
-                    onOpenBluetooth   = { navController.navigate("bluetooth_settings") },
+                    paddingValues   = innerPadding,
+                    onChangeVehicle = { navController.navigate("vehicle_picker") },
+                    onOpenBluetooth = { navController.navigate("bluetooth_settings") },
                 )
             }
-            composable("vehicle_picker") {
+
+            // ── Sub-screens: slide in from right ───────────────────────────
+            composable(
+                "vehicle_picker",
+                enterTransition    = { slideEnter },
+                exitTransition     = { slideExit },
+                popEnterTransition = { slidePopEnter },
+                popExitTransition  = { slidePopExit },
+            ) {
                 OnboardingScreen(
                     isChangingVehicle = true,
                     onComplete = { navController.popBackStack() },
                 )
             }
-            composable("bluetooth_settings") {
+            composable(
+                "bluetooth_settings",
+                enterTransition    = { slideEnter },
+                exitTransition     = { slideExit },
+                popEnterTransition = { slidePopEnter },
+                popExitTransition  = { slidePopExit },
+            ) {
                 BluetoothSettingsScreen(onBack = { navController.popBackStack() })
             }
         }

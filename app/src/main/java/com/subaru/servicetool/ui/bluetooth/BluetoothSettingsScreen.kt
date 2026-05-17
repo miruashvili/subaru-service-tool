@@ -1,5 +1,7 @@
 package com.subaru.servicetool.ui.bluetooth
 
+import android.content.Intent
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -21,7 +23,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.BluetoothDisabled
 import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.PhonelinkOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -43,6 +48,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -64,13 +70,16 @@ fun BluetoothSettingsScreen(
     val scanResults by viewModel.scanResults.collectAsState()
     val isScanning by viewModel.isScanning.collectAsState()
     val connectedMac = viewModel.connectedMac()
+    val context = LocalContext.current
 
     var permissionsGranted by remember { mutableStateOf(false) }
+    var permissionPermanentlyDenied by remember { mutableStateOf(false) }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { results ->
         permissionsGranted = results.values.all { it }
+        permissionPermanentlyDenied = !permissionsGranted
         if (permissionsGranted) viewModel.refreshPairedDevices()
     }
 
@@ -78,6 +87,8 @@ fun BluetoothSettingsScreen(
         val perms = viewModel.requiredPermissions()
         permissionLauncher.launch(perms)
     }
+
+    val bluetoothEnabled = viewModel.isBluetoothEnabled()
 
     Scaffold(
         topBar = {
@@ -104,16 +115,55 @@ fun BluetoothSettingsScreen(
                 Spacer(Modifier.height(8.dp))
             }
 
+            // ── Edge-case banners ────────────────────────────────────────────
+            if (!bluetoothEnabled) {
+                item {
+                    EdgeCaseBanner(
+                        icon = Icons.Filled.BluetoothDisabled,
+                        title = "Bluetooth is turned off",
+                        subtitle = "Enable Bluetooth to connect your OBD adapter",
+                        actionLabel = "Open Settings",
+                        onAction = { context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) },
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+
+            if (permissionPermanentlyDenied) {
+                item {
+                    EdgeCaseBanner(
+                        icon = Icons.Filled.Lock,
+                        title = "Bluetooth permission required",
+                        subtitle = "This app needs Bluetooth access to communicate with your OBD adapter. Grant it in App Settings.",
+                        actionLabel = "Open App Settings",
+                        onAction = {
+                            context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                data = android.net.Uri.fromParts("package", context.packageName, null)
+                            })
+                        },
+                    )
+                    Spacer(Modifier.height(8.dp))
+                }
+            }
+
             // ── Paired devices ───────────────────────────────────────────────
             item {
                 SectionHeader("PAIRED DEVICES")
                 Spacer(Modifier.height(6.dp))
             }
 
-            if (pairedDevices.isEmpty()) {
+            if (pairedDevices.isEmpty() && bluetoothEnabled && permissionsGranted) {
                 item {
-                    EmptyHint("No paired Bluetooth devices found")
+                    EdgeCaseBanner(
+                        icon = Icons.Filled.PhonelinkOff,
+                        title = "No OBD adapters paired",
+                        subtitle = "Open Android Bluetooth Settings to pair your OBD adapter first.",
+                        actionLabel = "Open Bluetooth Settings",
+                        onAction = { context.startActivity(Intent(Settings.ACTION_BLUETOOTH_SETTINGS)) },
+                    )
                 }
+            } else if (pairedDevices.isEmpty()) {
+                item { EmptyHint("No paired Bluetooth devices found") }
             } else {
                 items(pairedDevices, key = { it.address }) { item ->
                     DeviceRow(
@@ -352,15 +402,47 @@ private fun SectionHeader(text: String) {
 @Composable
 private fun EmptyHint(text: String) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 12.dp),
+        modifier = Modifier.fillMaxWidth().padding(vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(0.4f),
-        )
+        Text(text = text, style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(0.4f))
+    }
+}
+
+@Composable
+private fun EdgeCaseBanner(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    title: String,
+    subtitle: String,
+    actionLabel: String,
+    onAction: () -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(0.6f),
+        shape = RoundedCornerShape(14.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(icon, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(10.dp))
+                Text(title, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.height(6.dp))
+            Text(subtitle, style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(0.65f))
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = onAction,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = DarkPrimary),
+                contentPadding = PaddingValues(vertical = 8.dp),
+            ) {
+                Text(actionLabel, style = MaterialTheme.typography.labelMedium)
+            }
+        }
     }
 }

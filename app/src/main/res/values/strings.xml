@@ -24,6 +24,7 @@
     <string name="sensor_rel_throttle">Rel. Throttle Pos</string>
     <string name="sensor_abs_load">Absolute Load</string>
     <string name="sensor_run_time">Run Time</string>
+    <string name="sensor_oil_temp">Engine Oil Temp</string>
 
     <!-- Sensor groups -->
     <string name="group_engine">ENGINE</string>
@@ -153,6 +154,24 @@
     <string name="settings_psi">PSI</string>
     <string name="settings_language_section">LANGUAGE</string>
     <string name="settings_app_section">APP</string>
+    <!-- Alert banner -->
+    <string name="alert_coolant_critical">Coolant temp critical (≥120°C) — pull over immediately</string>
+    <string name="alert_oil_hot">Oil temp high (≥127°C) — reduce engine load</string>
+    <string name="alert_cvt_hot">CVT running hot (≥121°C) — ease off throttle</string>
+    <string name="alert_dismiss">Dismiss</string>
+    <string name="alert_connection_lost">Connection lost — retrying…</string>
+
+    <!-- Bluetooth edge cases -->
+    <string name="bt_disabled_title">Bluetooth is turned off</string>
+    <string name="bt_disabled_sub">Enable Bluetooth to connect your OBD adapter</string>
+    <string name="bt_permission_title">Permission required</string>
+    <string name="bt_permission_sub">Bluetooth access is needed to communicate with your OBD adapter</string>
+    <string name="bt_open_settings">Open Settings</string>
+    <string name="bt_no_devices_title">No OBD adapters paired</string>
+    <string name="bt_no_devices_sub">Go to Android Bluetooth Settings to pair your adapter first</string>
+    <string name="bt_open_bt_settings">Open Bluetooth Settings</string>
+    <string name="ssm_unavailable">SSM → OBD</string>
+
     <string name="settings_version">Version</string>
     <string name="settings_obd_protocol">OBD Protocol</string>
     <string name="settings_ssm">SSM Support</string>

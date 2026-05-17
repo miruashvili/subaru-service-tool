@@ -1,10 +1,16 @@
 package com.subaru.servicetool.ui.screens
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -88,26 +94,33 @@ fun SensorsScreen(
         }
 
         if (!connected) {
-            item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 40.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            Icons.Filled.Bluetooth,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurface.copy(0.25f),
-                            modifier = Modifier.size(48.dp),
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        Text(
-                            "Connect an OBD adapter to see live data",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(0.4f),
-                        )
+            val isConnecting = btState is BluetoothConnectionState.Connecting ||
+                    btState is BluetoothConnectionState.Reconnecting
+            if (isConnecting) {
+                // Shimmer skeleton while connecting
+                items(4) { SkeletonGroupCard() }
+            } else {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 40.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Filled.Bluetooth,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurface.copy(0.25f),
+                                modifier = Modifier.size(48.dp),
+                            )
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                "Connect an OBD adapter to see live data",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(0.4f),
+                            )
+                        }
                     }
                 }
             }
@@ -278,6 +291,7 @@ private fun ObdPid.localizedName(): String = when (cmd) {
     ObdPids.REL_THROTTLE.cmd -> stringResource(R.string.sensor_rel_throttle)
     ObdPids.ABS_LOAD.cmd     -> stringResource(R.string.sensor_abs_load)
     ObdPids.RUN_TIME.cmd     -> stringResource(R.string.sensor_run_time)
+    ObdPids.OIL_TEMP.cmd     -> stringResource(R.string.sensor_oil_temp)
     else                     -> name
 }
 
@@ -290,6 +304,47 @@ private val PidGroup.icon: ImageVector
         PidGroup.FUEL        -> Icons.Filled.LocalGasStation
         PidGroup.MISC        -> Icons.Filled.BatteryFull
     }
+
+// ── Shimmer skeleton ──────────────────────────────────────────────────────────
+
+@Composable
+private fun SkeletonGroupCard() {
+    val transition = rememberInfiniteTransition(label = "shimmer")
+    val alpha by transition.animateFloat(
+        initialValue = 0.25f,
+        targetValue  = 0.55f,
+        animationSpec = infiniteRepeatable(tween(750, easing = LinearEasing), RepeatMode.Reverse),
+        label = "shimmer_alpha",
+    )
+    val shimmerColor = MaterialTheme.colorScheme.onSurface.copy(alpha = alpha)
+
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(14.dp),
+        tonalElevation = 2.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            // Header placeholder
+            Box(
+                modifier = Modifier
+                    .height(10.dp)
+                    .fillMaxWidth(0.3f)
+                    .background(shimmerColor, RoundedCornerShape(4.dp)),
+            )
+            repeat(3) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(modifier = Modifier.height(12.dp).fillMaxWidth(0.45f).background(shimmerColor, RoundedCornerShape(4.dp)))
+                    Box(modifier = Modifier.height(16.dp).width(56.dp).background(shimmerColor, RoundedCornerShape(4.dp)))
+                }
+            }
+        }
+    }
+}
 
 /** Tiny helper to keep the 4-element destructuring in StatusBar clean. */
 private data class Quad<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)

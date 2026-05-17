@@ -22,6 +22,7 @@
     <string name="sensor_rel_throttle">Отн. положение дросселя</string>
     <string name="sensor_abs_load">Абсолютная нагрузка</string>
     <string name="sensor_run_time">Время работы</string>
+    <string name="sensor_oil_temp">Темп. масла двигателя</string>
 
     <string name="group_engine">ДВИГАТЕЛЬ</string>
     <string name="group_temperatures">ТЕМПЕРАТУРЫ</string>

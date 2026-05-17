@@ -22,6 +22,7 @@
     <string name="sensor_rel_throttle">შეფარდ. სასუნთქი პოზ.</string>
     <string name="sensor_abs_load">აბსოლ. დატვირთვა</string>
     <string name="sensor_run_time">მუშაობის დრო</string>
+    <string name="sensor_oil_temp">ძრავის ზეთის ტემპ.</string>
 
     <string name="group_engine">ᲫᲠᲐᲕᲘ</string>
     <string name="group_temperatures">ᲢᲔᲛᲞᲔᲠᲐᲢᲣᲠᲐ</string>

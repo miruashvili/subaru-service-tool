@@ -8,3 +8,7 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Signing keystores — keep credentials out of version control
+*.jks
+*.keystore

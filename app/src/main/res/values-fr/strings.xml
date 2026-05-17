@@ -177,7 +177,7 @@
 
     <!-- ECU relearn (post-DTC clear) -->
     <string name="ecu_relearn_title">Réapprentissage ECU requis</string>
-    <string name="ecu_relearn_message">Codes de défaut effacés. Conduisez normalement 10–15 minutes pour permettre à l'ECU de terminer son cycle d'apprentissage.</string>
+    <string name="ecu_relearn_message">Codes de défaut effacés. Conduisez normalement 10–15 minutes pour permettre à l\'ECU de terminer son cycle d\'apprentissage.</string>
 
     <!-- Recommendations section -->
     <string name="recommendations_title">Recommandations</string>

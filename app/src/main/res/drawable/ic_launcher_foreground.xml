@@ -1,10 +1,68 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Subaru Pleiades star-cluster icon (6 stars, gold on transparent).
+  Viewport 108×108 dp; safe zone 18–90 (central 72×72).
+  1 large star (left-centre) + 5 small stars in pentagon formation (right cluster).
+  Star geometry: 5-pointed, outer/inner radii computed via standard trigonometry.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- Large star: centre (38, 57), R=14, r=5.8 -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M72,36l-8,0c0,-8.837 -7.163,-16 -16,-16s-16,7.163 -16,16l-8,0c-2.209,0 -4,1.791 -4,4l0,4c0,2.209 1.791,4 4,4l3.515,0l3.172,22.2C31.257,72.453 33.393,74 35.839,74l36.322,0c2.446,0 4.582,-1.547 5.152,-3.8L80.485,48l3.515,0c2.209,0 4,-1.791 4,-4l0,-4c0,-2.209 -1.791,-4 -4,-4zM48,36c0,-4.418 3.582,-8 8,-8s8,3.582 8,8l-16,0z" />
+        android:fillColor="#FFD700"
+        android:pathData="
+            M38,43
+            L41.4,52.3 L51.3,52.7 L43.5,58.8
+            L46.2,68.3 L38,62.8 L29.8,68.3
+            L32.5,58.8 L24.7,52.7 L34.6,52.3 Z" />
+
+    <!-- Small star — top: centre (67, 35), R=7, r=2.9 -->
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="
+            M67,28
+            L68.7,32.7 L73.7,32.8 L69.8,35.9
+            L71.1,40.7 L67,37.9 L62.9,40.7
+            L64.2,35.9 L60.3,32.8 L65.3,32.7 Z" />
+
+    <!-- Small star — upper-right: centre (77.5, 42.6), R=7, r=2.9 -->
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="
+            M77.5,35.6
+            L79.2,40.3 L84.2,40.4 L80.3,43.5
+            L81.6,48.3 L77.5,45.5 L73.4,48.3
+            L74.7,43.5 L70.8,40.4 L75.8,40.3 Z" />
+
+    <!-- Small star — lower-right: centre (73.5, 54.9), R=7, r=2.9 -->
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="
+            M73.5,47.9
+            L75.2,52.6 L80.2,52.7 L76.3,55.8
+            L77.6,60.6 L73.5,57.8 L69.4,60.6
+            L70.7,55.8 L66.8,52.7 L71.8,52.6 Z" />
+
+    <!-- Small star — lower-left: centre (60.5, 54.9), R=7, r=2.9 -->
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="
+            M60.5,47.9
+            L62.2,52.6 L67.2,52.7 L63.3,55.8
+            L64.6,60.6 L60.5,57.8 L56.4,60.6
+            L57.7,55.8 L53.8,52.7 L58.8,52.6 Z" />
+
+    <!-- Small star — upper-left: centre (56.5, 42.6), R=7, r=2.9 -->
+    <path
+        android:fillColor="#FFD700"
+        android:pathData="
+            M56.5,35.6
+            L58.2,40.3 L63.2,40.4 L59.3,43.5
+            L60.6,48.3 L56.5,45.5 L52.4,48.3
+            L53.7,43.5 L49.8,40.4 L54.8,40.3 Z" />
+
 </vector>

@@ -110,6 +110,10 @@ class ObdQueryEngine @Inject constructor(
         }
     }
 
+    fun requestDtcRefresh() {
+        scope.launch { queryDtcs() }
+    }
+
     private suspend fun queryDtcs() {
         val response = btManager.sendCommand("03") ?: return
         val count = ObdParser.parseDtcCount(response)

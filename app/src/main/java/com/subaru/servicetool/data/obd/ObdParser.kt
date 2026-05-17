@@ -38,6 +38,33 @@ object ObdParser {
         "(\\d{1,2}\\.\\d{1,2})".toRegex().find(response)?.value?.toFloatOrNull()
 
     /**
+     * Parses stored DTC codes from a Mode 03 response into P/C/B/U strings (e.g. "P0971").
+     * Returns an empty list if no DTCs or on parse error.
+     */
+    fun parseDtcCodes(response: String): List<String> {
+        val tokens = tokenize(response) ?: return emptyList()
+        val idx = tokens.indexOfFirst { it == "43" }
+        if (idx < 0) return emptyList()
+        val dtcTokens = tokens.drop(idx + 1)
+        val codes = mutableListOf<String>()
+        var i = 0
+        while (i + 1 < dtcTokens.size) {
+            val hi = dtcTokens[i].toIntOrNull(16) ?: 0
+            val lo = dtcTokens[i + 1].toIntOrNull(16) ?: 0
+            if (hi != 0 || lo != 0) {
+                val type = when ((hi shr 6) and 0x3) { 0 -> "P"; 1 -> "C"; 2 -> "B"; else -> "U" }
+                val d1 = (hi shr 4) and 0x3
+                val d2 = hi and 0xF
+                val d3 = (lo shr 4) and 0xF
+                val d4 = lo and 0xF
+                codes.add("$type$d1${d2.toString(16).uppercase()}${d3.toString(16).uppercase()}${d4.toString(16).uppercase()}")
+            }
+            i += 2
+        }
+        return codes
+    }
+
+    /**
      * Counts stored DTCs from a Mode 03 response.
      * Each non-zero 2-byte pair after the "43" marker is one DTC.
      */

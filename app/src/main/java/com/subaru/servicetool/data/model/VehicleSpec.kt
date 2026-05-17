@@ -6,6 +6,9 @@ data class VehicleSpec(
     val engineCode: String,
     val engineDisplayName: String,
     val isTurbo: Boolean,
+    val generation: String = "",
+    val cvtType: String? = null,
+    val knownIssueIds: List<String> = emptyList(),
     val obdProtocol: String = "ISO 15765-4 CAN 11bit 500kbps",
     val ssmSupported: Boolean = true,
 )

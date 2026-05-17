@@ -28,7 +28,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.subaru.servicetool.ui.main.MainViewModel
 import com.subaru.servicetool.ui.onboarding.OnboardingScreen
-import com.subaru.servicetool.ui.screens.DashboardScreen
+import com.subaru.servicetool.ui.dashboard.DashboardScreen
 import com.subaru.servicetool.ui.screens.SensorsScreen
 import com.subaru.servicetool.ui.screens.ServiceScreen
 import com.subaru.servicetool.ui.screens.SettingsScreen

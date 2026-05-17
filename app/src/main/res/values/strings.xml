@@ -1,4 +1,161 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Subaru Service Tool</string>
+
+    <!-- Navigation -->
+    <string name="nav_dashboard">Dashboard</string>
+    <string name="nav_sensors">Sensors</string>
+    <string name="nav_service">Service</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Sensor names -->
+    <string name="sensor_rpm">Engine RPM</string>
+    <string name="sensor_speed">Vehicle Speed</string>
+    <string name="sensor_coolant_temp">Coolant Temp</string>
+    <string name="sensor_throttle">Throttle Position</string>
+    <string name="sensor_intake_temp">Intake Air Temp</string>
+    <string name="sensor_battery">Battery Voltage</string>
+    <string name="sensor_engine_load">Engine Load</string>
+    <string name="sensor_map">Manifold Pressure</string>
+    <string name="sensor_maf">MAF Air Flow</string>
+    <string name="sensor_fuel_level">Fuel Level</string>
+    <string name="sensor_fuel_trim_st">Fuel Trim (Short)</string>
+    <string name="sensor_fuel_trim_lt">Fuel Trim (Long)</string>
+    <string name="sensor_rel_throttle">Rel. Throttle Pos</string>
+    <string name="sensor_abs_load">Absolute Load</string>
+    <string name="sensor_run_time">Run Time</string>
+
+    <!-- Sensor groups -->
+    <string name="group_engine">ENGINE</string>
+    <string name="group_temperatures">TEMPERATURES</string>
+    <string name="group_fuel">FUEL</string>
+    <string name="group_misc">MISC</string>
+
+    <!-- Connection status -->
+    <string name="status_connected_no_faults">Connected · No fault codes</string>
+    <string name="status_connected_faults">Connected · %1$d fault code(s) detected</string>
+    <string name="status_connecting">Connecting…</string>
+    <string name="status_reconnecting">Reconnecting…</string>
+    <string name="status_not_connected">Not connected</string>
+    <string name="status_error">Error: %1$s</string>
+    <string name="connect_prompt">Connect an OBD adapter to see live data</string>
+
+    <!-- Dashboard -->
+    <string name="btn_connect">Connect</string>
+    <string name="btn_disconnect">Disconnect</string>
+
+    <!-- Service — DTC -->
+    <string name="diag_title">Fault Code Diagnostics</string>
+    <string name="btn_scan_system">Scan System</string>
+    <string name="btn_clear_all">Clear All</string>
+    <string name="diag_idle_hint">Press \'Scan System\' to read fault codes from the ECU.</string>
+    <string name="diag_reading">Reading fault codes…</string>
+    <string name="diag_clearing">Clearing fault codes…</string>
+    <string name="diag_no_codes">No fault codes found — system clear.</string>
+    <string name="diag_codes_detected">%1$d fault code(s) detected</string>
+    <string name="diag_unknown_code">Unknown fault code</string>
+    <string name="dtc_clear_title">Clear All Fault Codes?</string>
+    <string name="dtc_clear_message">This will erase all stored DTCs from the ECU. This action cannot be undone.</string>
+    <string name="dtc_clear_confirm">Clear All</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_save">Save</string>
+
+    <!-- Service — Procedures -->
+    <string name="proc_engine_adapt_title">Engine Adaptation Reset</string>
+    <string name="proc_engine_adapt_desc">Clears ECU adaptive fuel trims. Required after engine work, injector replacement, or rough idle.</string>
+    <string name="proc_engine_adapt_btn">Run Reset</string>
+    <string name="proc_engine_adapt_success">Adaptation cleared. Idle engine 10 min for ECU relearn.</string>
+    <string name="proc_engine_adapt_fail">Engine must be at operating temperature (≥70°C) and OBD connected.</string>
+    <string name="proc_throttle_title">Throttle Body Relearn</string>
+    <string name="proc_throttle_desc">Resets throttle position baseline. Required after cleaning throttle body or replacing the unit.</string>
+    <string name="proc_throttle_btn">Run Relearn</string>
+    <string name="proc_throttle_success">Throttle body relearn complete. Idle will stabilise in 1–2 min.</string>
+    <string name="proc_throttle_fail">Engine must be fully warm (≥80°C) and vehicle stationary.</string>
+    <string name="proc_cvt_title">CVT Reset &amp; Learning</string>
+    <string name="proc_cvt_desc">Resets CVT adaptive shift logic. Required after: CVT fluid change, valve body replacement, or solenoid replacement.</string>
+    <string name="proc_cvt_btn">Initiate CVT Reset</string>
+    <string name="proc_cvt_success">CVT learning initiated. Drive gently for 10–15 min.</string>
+    <string name="proc_cvt_fail">CVT reset aborted.</string>
+    <string name="proc_cvt_no_conditions">Complete all 5 conditions before initiating CVT reset.</string>
+    <string name="proc_step">Step %1$d of %2$d</string>
+
+    <!-- Service — CVT conditions -->
+    <string name="cvt_cond_warm">Engine warm (coolant ≥ 80°C)</string>
+    <string name="cvt_cond_stationary">Vehicle stationary (speed = 0)</string>
+    <string name="cvt_cond_idling">Engine idling (600–900 RPM)</string>
+    <string name="cvt_cond_park">Gear selector in P (Park)</string>
+    <string name="cvt_cond_accessories">A/C and all accessories off</string>
+    <string name="cvt_conditions_label">Conditions</string>
+
+    <!-- Service — TCV monitor -->
+    <string name="tcv_title">TCV Coolant Monitor</string>
+    <string name="btn_monitor">Monitor</string>
+    <string name="btn_stop">Stop</string>
+    <string name="tcv_collecting">Collecting data…</string>
+
+    <!-- Maintenance log -->
+    <string name="maint_title">Maintenance Log</string>
+    <string name="maint_empty">No service records yet.</string>
+    <string name="btn_add">Add</string>
+    <string name="maint_add_title">Log Service Event</string>
+    <string name="maint_type_label">Service Type</string>
+    <string name="maint_mileage_label">Odometer (km, optional)</string>
+    <string name="maint_notes_label">Notes (optional)</string>
+    <string name="maint_more_records">+ %1$d more records</string>
+    <string name="maint_today">Today</string>
+    <string name="maint_yesterday">Yesterday</string>
+    <string name="maint_days_ago">%1$d days ago</string>
+    <string name="maint_weeks_ago">%1$d weeks ago</string>
+    <string name="maint_months_ago">%1$d months ago</string>
+    <string name="maint_years_ago">%1$d year(s) ago</string>
+
+    <!-- Service event types -->
+    <string name="service_oil_change">Oil Change</string>
+    <string name="service_cvt_fluid">CVT Fluid</string>
+    <string name="service_brake_fluid">Brake Fluid</string>
+    <string name="service_coolant">Coolant</string>
+    <string name="service_spark_plugs">Spark Plugs</string>
+    <string name="service_air_filter">Air Filter</string>
+    <string name="service_tire_rotation">Tire Rotation</string>
+    <string name="service_other">Other</string>
+
+    <!-- Vehicle health -->
+    <string name="health_title">Vehicle Health</string>
+    <string name="issue_detected">DETECTED</string>
+    <string name="issue_dtcs">DTCs</string>
+    <string name="issue_symptoms">Symptoms</string>
+    <string name="issue_fix">Fix</string>
+    <string name="issue_known">Known Issue: %1$s</string>
+    <string name="issue_diagnosis">Diagnosis</string>
+    <string name="issue_repair">Repair</string>
+
+    <!-- Settings -->
+    <string name="settings_vehicle_section">VEHICLE</string>
+    <string name="settings_vehicle_no">No vehicle configured</string>
+    <string name="settings_change_vehicle">Change Vehicle</string>
+    <string name="settings_bluetooth_section">BLUETOOTH</string>
+    <string name="settings_obd_adapter">OBD Adapter</string>
+    <string name="settings_obd_adapter_sub">Pair and connect your Bluetooth OBD adapter</string>
+    <string name="settings_appearance_section">APPEARANCE</string>
+    <string name="settings_theme">Theme</string>
+    <string name="settings_dark">Dark</string>
+    <string name="settings_light">Light</string>
+    <string name="settings_system">System</string>
+    <string name="settings_landscape">Landscape Mode</string>
+    <string name="settings_landscape_sub">Allow screen rotation when tilted</string>
+    <string name="settings_units_section">UNITS</string>
+    <string name="settings_temp_unit">Temperature</string>
+    <string name="settings_celsius">°C Celsius</string>
+    <string name="settings_fahrenheit">°F Fahrenheit</string>
+    <string name="settings_press_unit">Pressure</string>
+    <string name="settings_kpa">kPa</string>
+    <string name="settings_bar">bar</string>
+    <string name="settings_psi">PSI</string>
+    <string name="settings_language_section">LANGUAGE</string>
+    <string name="settings_app_section">APP</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_obd_protocol">OBD Protocol</string>
+    <string name="settings_ssm">SSM Support</string>
+    <string name="settings_ssm_enabled">Enabled</string>
+    <string name="settings_ssm_not_supported">Not supported</string>
 </resources>

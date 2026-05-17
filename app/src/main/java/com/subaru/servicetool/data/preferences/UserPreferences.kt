@@ -11,9 +11,15 @@ import com.subaru.servicetool.data.model.VehicleDatabase
 import com.subaru.servicetool.data.model.VehicleSpec
 import com.subaru.servicetool.data.service.ServiceEvent
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
+
+data class DisplayUnits(
+    val temperatureUnit: String = "celsius",  // "celsius" | "fahrenheit"
+    val pressureUnit: String = "kpa",          // "kpa" | "bar" | "psi"
+)
 
 @Singleton
 class UserPreferences @Inject constructor(
@@ -27,7 +33,14 @@ class UserPreferences @Inject constructor(
         private val KEY_LAST_DEVICE_MAC  = stringPreferencesKey("last_device_mac")
         private val KEY_LAST_DEVICE_TYPE = stringPreferencesKey("last_device_type")
         private val KEY_SERVICE_LOG      = stringPreferencesKey("service_log")
+        private val KEY_THEME            = stringPreferencesKey("theme")
+        private val KEY_TEMP_UNIT        = stringPreferencesKey("temp_unit")
+        private val KEY_PRESS_UNIT       = stringPreferencesKey("press_unit")
+        private val KEY_LANGUAGE         = stringPreferencesKey("language")
+        private val KEY_LANDSCAPE        = booleanPreferencesKey("landscape")
     }
+
+    // ── Vehicle & onboarding ──────────────────────────────────────────────────
 
     val isOnboardingComplete: Flow<Boolean> = dataStore.data.map { prefs ->
         prefs[KEY_ONBOARDING_DONE] ?: false
@@ -40,10 +53,6 @@ class UserPreferences @Inject constructor(
         VehicleDatabase.findVehicle(year, model, engine)
     }
 
-    val lastDeviceMac: Flow<String?> = dataStore.data.map { it[KEY_LAST_DEVICE_MAC] }
-
-    val lastDeviceType: Flow<String?> = dataStore.data.map { it[KEY_LAST_DEVICE_TYPE] }
-
     suspend fun saveVehicle(vehicle: VehicleSpec) {
         dataStore.edit { prefs ->
             prefs[KEY_ONBOARDING_DONE] = true
@@ -53,12 +62,58 @@ class UserPreferences @Inject constructor(
         }
     }
 
+    // ── Bluetooth ─────────────────────────────────────────────────────────────
+
+    val lastDeviceMac: Flow<String?> = dataStore.data.map { it[KEY_LAST_DEVICE_MAC] }
+    val lastDeviceType: Flow<String?> = dataStore.data.map { it[KEY_LAST_DEVICE_TYPE] }
+
     suspend fun saveLastDevice(mac: String, type: OBDConnectionType) {
         dataStore.edit { prefs ->
             prefs[KEY_LAST_DEVICE_MAC]  = mac
             prefs[KEY_LAST_DEVICE_TYPE] = type.name
         }
     }
+
+    // ── Appearance ────────────────────────────────────────────────────────────
+
+    val themeMode: Flow<String> = dataStore.data.map { it[KEY_THEME] ?: "system" }
+
+    suspend fun setThemeMode(mode: String) {
+        dataStore.edit { it[KEY_THEME] = mode }
+    }
+
+    val landscapeEnabled: Flow<Boolean> = dataStore.data.map { it[KEY_LANDSCAPE] ?: false }
+
+    suspend fun setLandscapeEnabled(enabled: Boolean) {
+        dataStore.edit { it[KEY_LANDSCAPE] = enabled }
+    }
+
+    // ── Units ─────────────────────────────────────────────────────────────────
+
+    val temperatureUnit: Flow<String> = dataStore.data.map { it[KEY_TEMP_UNIT] ?: "celsius" }
+    val pressureUnit: Flow<String>    = dataStore.data.map { it[KEY_PRESS_UNIT] ?: "kpa" }
+
+    val displayUnits: Flow<DisplayUnits> = combine(temperatureUnit, pressureUnit) { t, p ->
+        DisplayUnits(t, p)
+    }
+
+    suspend fun setTemperatureUnit(unit: String) {
+        dataStore.edit { it[KEY_TEMP_UNIT] = unit }
+    }
+
+    suspend fun setPressureUnit(unit: String) {
+        dataStore.edit { it[KEY_PRESS_UNIT] = unit }
+    }
+
+    // ── Language ──────────────────────────────────────────────────────────────
+
+    val language: Flow<String> = dataStore.data.map { it[KEY_LANGUAGE] ?: "" }
+
+    suspend fun setLanguage(tag: String) {
+        dataStore.edit { it[KEY_LANGUAGE] = tag }
+    }
+
+    // ── Service log ───────────────────────────────────────────────────────────
 
     val serviceLog: Flow<List<ServiceEvent>> = dataStore.data.map { prefs ->
         (prefs[KEY_SERVICE_LOG] ?: "")

@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Subaru Service Tool</string>
+
+    <string name="nav_dashboard">Übersicht</string>
+    <string name="nav_sensors">Sensoren</string>
+    <string name="nav_service">Wartung</string>
+    <string name="nav_settings">Einstellungen</string>
+
+    <string name="sensor_rpm">Motordrehzahl</string>
+    <string name="sensor_speed">Fahrzeuggeschwindigkeit</string>
+    <string name="sensor_coolant_temp">Kühlmitteltemp.</string>
+    <string name="sensor_throttle">Drosselklappenstellung</string>
+    <string name="sensor_intake_temp">Ansauglufttemperatur</string>
+    <string name="sensor_battery">Batteriespannung</string>
+    <string name="sensor_engine_load">Motorlast</string>
+    <string name="sensor_map">Saugrohrdruck</string>
+    <string name="sensor_maf">Luftmassenstrom MAF</string>
+    <string name="sensor_fuel_level">Kraftstoffstand</string>
+    <string name="sensor_fuel_trim_st">Kraftstoffkorr. (Kurz)</string>
+    <string name="sensor_fuel_trim_lt">Kraftstoffkorr. (Lang)</string>
+    <string name="sensor_rel_throttle">Rel. Drosselklappenpos.</string>
+    <string name="sensor_abs_load">Absolute Last</string>
+    <string name="sensor_run_time">Laufzeit</string>
+
+    <string name="group_engine">MOTOR</string>
+    <string name="group_temperatures">TEMPERATUREN</string>
+    <string name="group_fuel">KRAFTSTOFF</string>
+    <string name="group_misc">SONSTIGES</string>
+
+    <string name="status_connected_no_faults">Verbunden · Keine Fehlercodes</string>
+    <string name="status_connected_faults">Verbunden · %1$d Fehlercode(s) erkannt</string>
+    <string name="status_connecting">Verbinde…</string>
+    <string name="status_reconnecting">Wiederverbinde…</string>
+    <string name="status_not_connected">Nicht verbunden</string>
+    <string name="status_error">Fehler: %1$s</string>
+    <string name="connect_prompt">OBD-Adapter verbinden, um Live-Daten zu sehen</string>
+
+    <string name="btn_connect">Verbinden</string>
+    <string name="btn_disconnect">Trennen</string>
+
+    <string name="diag_title">Fehlercode-Diagnose</string>
+    <string name="btn_scan_system">System Scannen</string>
+    <string name="btn_clear_all">Alle Löschen</string>
+    <string name="diag_idle_hint">Tippe \'System Scannen\', um Fehlercodes aus dem Steuergerät zu lesen.</string>
+    <string name="diag_reading">Fehlercodes werden gelesen…</string>
+    <string name="diag_clearing">Fehlercodes werden gelöscht…</string>
+    <string name="diag_no_codes">Keine Fehlercodes gefunden — System in Ordnung.</string>
+    <string name="diag_codes_detected">%1$d Fehlercode(s) erkannt</string>
+    <string name="diag_unknown_code">Unbekannter Fehlercode</string>
+    <string name="dtc_clear_title">Alle Fehlercodes löschen?</string>
+    <string name="dtc_clear_message">Alle gespeicherten DTCs werden aus dem Steuergerät gelöscht. Diese Aktion kann nicht rückgängig gemacht werden.</string>
+    <string name="dtc_clear_confirm">Alle Löschen</string>
+    <string name="btn_cancel">Abbrechen</string>
+    <string name="btn_save">Speichern</string>
+
+    <string name="proc_engine_adapt_title">Motor-Adaption Zurücksetzen</string>
+    <string name="proc_engine_adapt_desc">Löscht adaptive Kraftstoffkorrekturen des Steuergeräts. Erforderlich nach Motorarbeiten, Injektorwechsel oder unruhigem Leerlauf.</string>
+    <string name="proc_engine_adapt_btn">Reset Ausführen</string>
+    <string name="proc_engine_adapt_success">Adaption gelöscht. Motor 10 Min. im Leerlauf lassen für Neulernen des Steuergeräts.</string>
+    <string name="proc_engine_adapt_fail">Motor muss auf Betriebstemperatur (≥70°C) sein und OBD verbunden.</string>
+    <string name="proc_throttle_title">Drosselklappen-Neulernen</string>
+    <string name="proc_throttle_desc">Setzt Drosselklappen-Grundstellung zurück. Erforderlich nach Reinigung oder Austausch der Drosselklappe.</string>
+    <string name="proc_throttle_btn">Neulernen Ausführen</string>
+    <string name="proc_throttle_success">Drosselklappen-Neulernen abgeschlossen. Leerlauf stabilisiert sich in 1–2 Min.</string>
+    <string name="proc_throttle_fail">Motor muss vollständig warm sein (≥80°C) und Fahrzeug stehen.</string>
+    <string name="proc_cvt_title">CVT-Zurücksetzen &amp; Lernen</string>
+    <string name="proc_cvt_desc">Setzt adaptive Schaltlogik des CVT zurück. Erforderlich nach: CVT-Ölwechsel, Ventilblock- oder Solenoidtausch.</string>
+    <string name="proc_cvt_btn">CVT-Reset Starten</string>
+    <string name="proc_cvt_success">CVT-Lernen gestartet. Sanft 10–15 Min. fahren.</string>
+    <string name="proc_cvt_fail">CVT-Reset abgebrochen.</string>
+    <string name="proc_cvt_no_conditions">Alle 5 Bedingungen erfüllen, bevor CVT-Reset gestartet wird.</string>
+    <string name="proc_step">Schritt %1$d von %2$d</string>
+
+    <string name="cvt_cond_warm">Motor warm (Kühlmittel ≥ 80°C)</string>
+    <string name="cvt_cond_stationary">Fahrzeug stehend (Geschwindigkeit = 0)</string>
+    <string name="cvt_cond_idling">Motor im Leerlauf (600–900 U/min)</string>
+    <string name="cvt_cond_park">Wählhebel in P (Parken)</string>
+    <string name="cvt_cond_accessories">Klimaanlage und alle Verbraucher aus</string>
+    <string name="cvt_conditions_label">Bedingungen</string>
+
+    <string name="tcv_title">TCV-Kühlmittelüberwachung</string>
+    <string name="btn_monitor">Überwachen</string>
+    <string name="btn_stop">Stoppen</string>
+    <string name="tcv_collecting">Daten werden gesammelt…</string>
+
+    <string name="maint_title">Wartungsprotokoll</string>
+    <string name="maint_empty">Noch keine Serviceeinträge.</string>
+    <string name="btn_add">Hinzufügen</string>
+    <string name="maint_add_title">Serviceereignis Erfassen</string>
+    <string name="maint_type_label">Servicetyp</string>
+    <string name="maint_mileage_label">Kilometerstand (km, optional)</string>
+    <string name="maint_notes_label">Notizen (optional)</string>
+    <string name="maint_more_records">+ %1$d weitere Einträge</string>
+    <string name="maint_today">Heute</string>
+    <string name="maint_yesterday">Gestern</string>
+    <string name="maint_days_ago">Vor %1$d Tagen</string>
+    <string name="maint_weeks_ago">Vor %1$d Wochen</string>
+    <string name="maint_months_ago">Vor %1$d Monaten</string>
+    <string name="maint_years_ago">Vor %1$d Jahr(en)</string>
+
+    <string name="service_oil_change">Ölwechsel</string>
+    <string name="service_cvt_fluid">CVT-Öl</string>
+    <string name="service_brake_fluid">Bremsflüssigkeit</string>
+    <string name="service_coolant">Kühlmittel</string>
+    <string name="service_spark_plugs">Zündkerzen</string>
+    <string name="service_air_filter">Luftfilter</string>
+    <string name="service_tire_rotation">Reifenwechsel</string>
+    <string name="service_other">Sonstiges</string>
+
+    <string name="health_title">Fahrzeugzustand</string>
+    <string name="issue_detected">ERKANNT</string>
+    <string name="issue_dtcs">DTCs</string>
+    <string name="issue_symptoms">Symptome</string>
+    <string name="issue_fix">Lösung</string>
+    <string name="issue_known">Bekanntes Problem: %1$s</string>
+    <string name="issue_diagnosis">Diagnose</string>
+    <string name="issue_repair">Reparatur</string>
+
+    <string name="settings_vehicle_section">FAHRZEUG</string>
+    <string name="settings_vehicle_no">Kein Fahrzeug konfiguriert</string>
+    <string name="settings_change_vehicle">Fahrzeug Wechseln</string>
+    <string name="settings_bluetooth_section">BLUETOOTH</string>
+    <string name="settings_obd_adapter">OBD-Adapter</string>
+    <string name="settings_obd_adapter_sub">Bluetooth-OBD-Adapter koppeln und verbinden</string>
+    <string name="settings_appearance_section">DARSTELLUNG</string>
+    <string name="settings_theme">Design</string>
+    <string name="settings_dark">Dunkel</string>
+    <string name="settings_light">Hell</string>
+    <string name="settings_system">System</string>
+    <string name="settings_landscape">Querformat</string>
+    <string name="settings_landscape_sub">Bildschirmrotation beim Kippen erlauben</string>
+    <string name="settings_units_section">EINHEITEN</string>
+    <string name="settings_temp_unit">Temperatur</string>
+    <string name="settings_celsius">°C Celsius</string>
+    <string name="settings_fahrenheit">°F Fahrenheit</string>
+    <string name="settings_press_unit">Druck</string>
+    <string name="settings_kpa">kPa</string>
+    <string name="settings_bar">bar</string>
+    <string name="settings_psi">PSI</string>
+    <string name="settings_language_section">SPRACHE</string>
+    <string name="settings_app_section">APP</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_obd_protocol">OBD-Protokoll</string>
+    <string name="settings_ssm">SSM-Unterstützung</string>
+    <string name="settings_ssm_enabled">Aktiviert</string>
+    <string name="settings_ssm_not_supported">Nicht unterstützt</string>
+</resources>

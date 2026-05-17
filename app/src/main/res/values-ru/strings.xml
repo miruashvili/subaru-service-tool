@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Subaru Service Tool</string>
+
+    <string name="nav_dashboard">Панель</string>
+    <string name="nav_sensors">Датчики</string>
+    <string name="nav_service">Обслуживание</string>
+    <string name="nav_settings">Настройки</string>
+
+    <string name="sensor_rpm">Обороты двигателя</string>
+    <string name="sensor_speed">Скорость авто</string>
+    <string name="sensor_coolant_temp">Темп. охл. жидкости</string>
+    <string name="sensor_throttle">Положение дросселя</string>
+    <string name="sensor_intake_temp">Темп. воздуха на входе</string>
+    <string name="sensor_battery">Напряжение АКБ</string>
+    <string name="sensor_engine_load">Нагрузка на двигатель</string>
+    <string name="sensor_map">Давление во впускном коллекторе</string>
+    <string name="sensor_maf">Расход воздуха MAF</string>
+    <string name="sensor_fuel_level">Уровень топлива</string>
+    <string name="sensor_fuel_trim_st">Корр. топлива (краткоср.)</string>
+    <string name="sensor_fuel_trim_lt">Корр. топлива (долгоср.)</string>
+    <string name="sensor_rel_throttle">Отн. положение дросселя</string>
+    <string name="sensor_abs_load">Абсолютная нагрузка</string>
+    <string name="sensor_run_time">Время работы</string>
+
+    <string name="group_engine">ДВИГАТЕЛЬ</string>
+    <string name="group_temperatures">ТЕМПЕРАТУРЫ</string>
+    <string name="group_fuel">ТОПЛИВО</string>
+    <string name="group_misc">ПРОЧЕЕ</string>
+
+    <string name="status_connected_no_faults">Подключено · Нет ошибок</string>
+    <string name="status_connected_faults">Подключено · %1$d ошибок(ки) обнаружено</string>
+    <string name="status_connecting">Подключение…</string>
+    <string name="status_reconnecting">Переподключение…</string>
+    <string name="status_not_connected">Не подключено</string>
+    <string name="status_error">Ошибка: %1$s</string>
+    <string name="connect_prompt">Подключите OBD-адаптер для просмотра данных</string>
+
+    <string name="btn_connect">Подключить</string>
+    <string name="btn_disconnect">Отключить</string>
+
+    <string name="diag_title">Диагностика кодов ошибок</string>
+    <string name="btn_scan_system">Сканировать систему</string>
+    <string name="btn_clear_all">Очистить всё</string>
+    <string name="diag_idle_hint">Нажмите \'Сканировать систему\' для чтения кодов ошибок из ЭБУ.</string>
+    <string name="diag_reading">Чтение кодов ошибок…</string>
+    <string name="diag_clearing">Очистка кодов ошибок…</string>
+    <string name="diag_no_codes">Коды ошибок не найдены — система исправна.</string>
+    <string name="diag_codes_detected">Обнаружено %1$d кодов(а) ошибок</string>
+    <string name="diag_unknown_code">Неизвестный код ошибки</string>
+    <string name="dtc_clear_title">Очистить все коды ошибок?</string>
+    <string name="dtc_clear_message">Это удалит все сохранённые DTC из ЭБУ. Это действие нельзя отменить.</string>
+    <string name="dtc_clear_confirm">Очистить всё</string>
+    <string name="btn_cancel">Отмена</string>
+    <string name="btn_save">Сохранить</string>
+
+    <string name="proc_engine_adapt_title">Сброс адаптации двигателя</string>
+    <string name="proc_engine_adapt_desc">Сбрасывает адаптивные коррекции топлива ЭБУ. Требуется после работ на двигателе, замены форсунок или нестабильного холостого хода.</string>
+    <string name="proc_engine_adapt_btn">Выполнить сброс</string>
+    <string name="proc_engine_adapt_success">Адаптация сброшена. Дайте двигателю поработать на холостом ходу 10 мин для обучения ЭБУ.</string>
+    <string name="proc_engine_adapt_fail">Двигатель должен быть прогрет (≥70°C) и OBD подключён.</string>
+    <string name="proc_throttle_title">Обучение дроссельной заслонки</string>
+    <string name="proc_throttle_desc">Сбрасывает базовое положение дросселя. Требуется после чистки или замены дроссельного узла.</string>
+    <string name="proc_throttle_btn">Выполнить обучение</string>
+    <string name="proc_throttle_success">Обучение дросселя завершено. Холостой ход стабилизируется за 1–2 мин.</string>
+    <string name="proc_throttle_fail">Двигатель должен быть полностью прогрет (≥80°C) и автомобиль стоять.</string>
+    <string name="proc_cvt_title">Сброс и обучение CVT</string>
+    <string name="proc_cvt_desc">Сбрасывает адаптивную логику переключения CVT. Требуется после: замены масла CVT, гидроблока или соленоида.</string>
+    <string name="proc_cvt_btn">Запустить сброс CVT</string>
+    <string name="proc_cvt_success">Обучение CVT запущено. Езжайте плавно 10–15 мин.</string>
+    <string name="proc_cvt_fail">Сброс CVT прерван.</string>
+    <string name="proc_cvt_no_conditions">Выполните все 5 условий перед запуском сброса CVT.</string>
+    <string name="proc_step">Шаг %1$d из %2$d</string>
+
+    <string name="cvt_cond_warm">Двигатель прогрет (охл. жидкость ≥ 80°C)</string>
+    <string name="cvt_cond_stationary">Автомобиль стоит (скорость = 0)</string>
+    <string name="cvt_cond_idling">Двигатель на холостом ходу (600–900 об/мин)</string>
+    <string name="cvt_cond_park">Селектор в положении P (Парковка)</string>
+    <string name="cvt_cond_accessories">Кондиционер и все потребители выключены</string>
+    <string name="cvt_conditions_label">Условия</string>
+
+    <string name="tcv_title">Монитор охл. жидкости TCV</string>
+    <string name="btn_monitor">Мониторинг</string>
+    <string name="btn_stop">Стоп</string>
+    <string name="tcv_collecting">Сбор данных…</string>
+
+    <string name="maint_title">Журнал обслуживания</string>
+    <string name="maint_empty">Записи об обслуживании отсутствуют.</string>
+    <string name="btn_add">Добавить</string>
+    <string name="maint_add_title">Записать обслуживание</string>
+    <string name="maint_type_label">Тип обслуживания</string>
+    <string name="maint_mileage_label">Пробег (км, необязательно)</string>
+    <string name="maint_notes_label">Заметки (необязательно)</string>
+    <string name="maint_more_records">+ ещё %1$d записей</string>
+    <string name="maint_today">Сегодня</string>
+    <string name="maint_yesterday">Вчера</string>
+    <string name="maint_days_ago">%1$d дней назад</string>
+    <string name="maint_weeks_ago">%1$d недель назад</string>
+    <string name="maint_months_ago">%1$d месяцев назад</string>
+    <string name="maint_years_ago">%1$d лет назад</string>
+
+    <string name="service_oil_change">Замена масла</string>
+    <string name="service_cvt_fluid">Масло CVT</string>
+    <string name="service_brake_fluid">Тормозная жидкость</string>
+    <string name="service_coolant">Охлаждающая жидкость</string>
+    <string name="service_spark_plugs">Свечи зажигания</string>
+    <string name="service_air_filter">Воздушный фильтр</string>
+    <string name="service_tire_rotation">Ротация шин</string>
+    <string name="service_other">Другое</string>
+
+    <string name="health_title">Состояние автомобиля</string>
+    <string name="issue_detected">ОБНАРУЖЕНО</string>
+    <string name="issue_dtcs">DTCs</string>
+    <string name="issue_symptoms">Симптомы</string>
+    <string name="issue_fix">Решение</string>
+    <string name="issue_known">Известная проблема: %1$s</string>
+    <string name="issue_diagnosis">Диагностика</string>
+    <string name="issue_repair">Ремонт</string>
+
+    <string name="settings_vehicle_section">АВТОМОБИЛЬ</string>
+    <string name="settings_vehicle_no">Автомобиль не настроен</string>
+    <string name="settings_change_vehicle">Сменить автомобиль</string>
+    <string name="settings_bluetooth_section">BLUETOOTH</string>
+    <string name="settings_obd_adapter">OBD-адаптер</string>
+    <string name="settings_obd_adapter_sub">Сопряжение и подключение Bluetooth OBD-адаптера</string>
+    <string name="settings_appearance_section">ОФОРМЛЕНИЕ</string>
+    <string name="settings_theme">Тема</string>
+    <string name="settings_dark">Тёмная</string>
+    <string name="settings_light">Светлая</string>
+    <string name="settings_system">Системная</string>
+    <string name="settings_landscape">Альбомный режим</string>
+    <string name="settings_landscape_sub">Разрешить поворот экрана при наклоне</string>
+    <string name="settings_units_section">ЕДИНИЦЫ</string>
+    <string name="settings_temp_unit">Температура</string>
+    <string name="settings_celsius">°C Цельсий</string>
+    <string name="settings_fahrenheit">°F Фаренгейт</string>
+    <string name="settings_press_unit">Давление</string>
+    <string name="settings_kpa">кПа</string>
+    <string name="settings_bar">бар</string>
+    <string name="settings_psi">PSI</string>
+    <string name="settings_language_section">ЯЗЫК</string>
+    <string name="settings_app_section">ПРИЛОЖЕНИЕ</string>
+    <string name="settings_version">Версия</string>
+    <string name="settings_obd_protocol">Протокол OBD</string>
+    <string name="settings_ssm">Поддержка SSM</string>
+    <string name="settings_ssm_enabled">Включена</string>
+    <string name="settings_ssm_not_supported">Не поддерживается</string>
+</resources>

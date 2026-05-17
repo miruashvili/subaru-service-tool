@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Subaru Service Tool</string>
+
+    <string name="nav_dashboard">Panel</string>
+    <string name="nav_sensors">Sensores</string>
+    <string name="nav_service">Servicio</string>
+    <string name="nav_settings">Ajustes</string>
+
+    <string name="sensor_rpm">RPM del Motor</string>
+    <string name="sensor_speed">Velocidad del Vehículo</string>
+    <string name="sensor_coolant_temp">Temp. Refrigerante</string>
+    <string name="sensor_throttle">Posición del Acelerador</string>
+    <string name="sensor_intake_temp">Temp. Aire de Admisión</string>
+    <string name="sensor_battery">Voltaje de Batería</string>
+    <string name="sensor_engine_load">Carga del Motor</string>
+    <string name="sensor_map">Presión del Colector</string>
+    <string name="sensor_maf">Flujo de Aire MAF</string>
+    <string name="sensor_fuel_level">Nivel de Combustible</string>
+    <string name="sensor_fuel_trim_st">Corrección Comb. (Corta)</string>
+    <string name="sensor_fuel_trim_lt">Corrección Comb. (Larga)</string>
+    <string name="sensor_rel_throttle">Pos. Acelerador Relativa</string>
+    <string name="sensor_abs_load">Carga Absoluta</string>
+    <string name="sensor_run_time">Tiempo de Marcha</string>
+
+    <string name="group_engine">MOTOR</string>
+    <string name="group_temperatures">TEMPERATURAS</string>
+    <string name="group_fuel">COMBUSTIBLE</string>
+    <string name="group_misc">MISC</string>
+
+    <string name="status_connected_no_faults">Conectado · Sin códigos de fallo</string>
+    <string name="status_connected_faults">Conectado · %1$d código(s) de fallo detectado(s)</string>
+    <string name="status_connecting">Conectando…</string>
+    <string name="status_reconnecting">Reconectando…</string>
+    <string name="status_not_connected">No conectado</string>
+    <string name="status_error">Error: %1$s</string>
+    <string name="connect_prompt">Conecta un adaptador OBD para ver datos en vivo</string>
+
+    <string name="btn_connect">Conectar</string>
+    <string name="btn_disconnect">Desconectar</string>
+
+    <string name="diag_title">Diagnóstico de Códigos de Fallo</string>
+    <string name="btn_scan_system">Escanear Sistema</string>
+    <string name="btn_clear_all">Borrar Todo</string>
+    <string name="diag_idle_hint">Pulsa \'Escanear Sistema\' para leer códigos de fallo de la ECU.</string>
+    <string name="diag_reading">Leyendo códigos de fallo…</string>
+    <string name="diag_clearing">Borrando códigos de fallo…</string>
+    <string name="diag_no_codes">Sin códigos de fallo — sistema limpio.</string>
+    <string name="diag_codes_detected">%1$d código(s) de fallo detectado(s)</string>
+    <string name="diag_unknown_code">Código de fallo desconocido</string>
+    <string name="dtc_clear_title">¿Borrar todos los códigos de fallo?</string>
+    <string name="dtc_clear_message">Esto borrará todos los DTCs almacenados de la ECU. Esta acción no se puede deshacer.</string>
+    <string name="dtc_clear_confirm">Borrar Todo</string>
+    <string name="btn_cancel">Cancelar</string>
+    <string name="btn_save">Guardar</string>
+
+    <string name="proc_engine_adapt_title">Reinicio de Adaptación del Motor</string>
+    <string name="proc_engine_adapt_desc">Borra las correcciones de combustible adaptativas de la ECU. Necesario tras trabajos en el motor, cambio de inyectores o ralentí irregular.</string>
+    <string name="proc_engine_adapt_btn">Ejecutar Reinicio</string>
+    <string name="proc_engine_adapt_success">Adaptación borrada. Deja el motor al ralentí 10 min para el reaprendizaje de la ECU.</string>
+    <string name="proc_engine_adapt_fail">El motor debe estar a temperatura de funcionamiento (≥70°C) y el OBD conectado.</string>
+    <string name="proc_throttle_title">Reaprendizaje del Cuerpo de Mariposa</string>
+    <string name="proc_throttle_desc">Reinicia la posición base del acelerador. Necesario tras limpiar o reemplazar el cuerpo de mariposa.</string>
+    <string name="proc_throttle_btn">Ejecutar Reaprendizaje</string>
+    <string name="proc_throttle_success">Reaprendizaje del cuerpo de mariposa completado. El ralentí se estabilizará en 1–2 min.</string>
+    <string name="proc_throttle_fail">El motor debe estar completamente caliente (≥80°C) y el vehículo estacionado.</string>
+    <string name="proc_cvt_title">Reinicio y Aprendizaje del CVT</string>
+    <string name="proc_cvt_desc">Reinicia la lógica adaptativa de cambio del CVT. Necesario tras: cambio de fluido CVT, reemplazo del cuerpo de válvulas o solenoide.</string>
+    <string name="proc_cvt_btn">Iniciar Reinicio CVT</string>
+    <string name="proc_cvt_success">Aprendizaje del CVT iniciado. Conduce suavemente durante 10–15 min.</string>
+    <string name="proc_cvt_fail">Reinicio del CVT cancelado.</string>
+    <string name="proc_cvt_no_conditions">Completa las 5 condiciones antes de iniciar el reinicio del CVT.</string>
+    <string name="proc_step">Paso %1$d de %2$d</string>
+
+    <string name="cvt_cond_warm">Motor caliente (refrigerante ≥ 80°C)</string>
+    <string name="cvt_cond_stationary">Vehículo estacionario (velocidad = 0)</string>
+    <string name="cvt_cond_idling">Motor al ralentí (600–900 RPM)</string>
+    <string name="cvt_cond_park">Selector de marcha en P (Aparcamiento)</string>
+    <string name="cvt_cond_accessories">A/C y todos los accesorios apagados</string>
+    <string name="cvt_conditions_label">Condiciones</string>
+
+    <string name="tcv_title">Monitor de Refrigerante TCV</string>
+    <string name="btn_monitor">Monitorear</string>
+    <string name="btn_stop">Detener</string>
+    <string name="tcv_collecting">Recopilando datos…</string>
+
+    <string name="maint_title">Registro de Mantenimiento</string>
+    <string name="maint_empty">Sin registros de servicio aún.</string>
+    <string name="btn_add">Añadir</string>
+    <string name="maint_add_title">Registrar Evento de Servicio</string>
+    <string name="maint_type_label">Tipo de Servicio</string>
+    <string name="maint_mileage_label">Odómetro (km, opcional)</string>
+    <string name="maint_notes_label">Notas (opcional)</string>
+    <string name="maint_more_records">+ %1$d registros más</string>
+    <string name="maint_today">Hoy</string>
+    <string name="maint_yesterday">Ayer</string>
+    <string name="maint_days_ago">Hace %1$d días</string>
+    <string name="maint_weeks_ago">Hace %1$d semanas</string>
+    <string name="maint_months_ago">Hace %1$d meses</string>
+    <string name="maint_years_ago">Hace %1$d año(s)</string>
+
+    <string name="service_oil_change">Cambio de Aceite</string>
+    <string name="service_cvt_fluid">Fluido CVT</string>
+    <string name="service_brake_fluid">Líquido de Frenos</string>
+    <string name="service_coolant">Refrigerante</string>
+    <string name="service_spark_plugs">Bujías</string>
+    <string name="service_air_filter">Filtro de Aire</string>
+    <string name="service_tire_rotation">Rotación de Neumáticos</string>
+    <string name="service_other">Otro</string>
+
+    <string name="health_title">Estado del Vehículo</string>
+    <string name="issue_detected">DETECTADO</string>
+    <string name="issue_dtcs">DTCs</string>
+    <string name="issue_symptoms">Síntomas</string>
+    <string name="issue_fix">Solución</string>
+    <string name="issue_known">Problema Conocido: %1$s</string>
+    <string name="issue_diagnosis">Diagnóstico</string>
+    <string name="issue_repair">Reparación</string>
+
+    <string name="settings_vehicle_section">VEHÍCULO</string>
+    <string name="settings_vehicle_no">Sin vehículo configurado</string>
+    <string name="settings_change_vehicle">Cambiar Vehículo</string>
+    <string name="settings_bluetooth_section">BLUETOOTH</string>
+    <string name="settings_obd_adapter">Adaptador OBD</string>
+    <string name="settings_obd_adapter_sub">Empareja y conecta tu adaptador OBD Bluetooth</string>
+    <string name="settings_appearance_section">APARIENCIA</string>
+    <string name="settings_theme">Tema</string>
+    <string name="settings_dark">Oscuro</string>
+    <string name="settings_light">Claro</string>
+    <string name="settings_system">Sistema</string>
+    <string name="settings_landscape">Modo Paisaje</string>
+    <string name="settings_landscape_sub">Permitir rotación de pantalla al inclinar</string>
+    <string name="settings_units_section">UNIDADES</string>
+    <string name="settings_temp_unit">Temperatura</string>
+    <string name="settings_celsius">°C Celsius</string>
+    <string name="settings_fahrenheit">°F Fahrenheit</string>
+    <string name="settings_press_unit">Presión</string>
+    <string name="settings_kpa">kPa</string>
+    <string name="settings_bar">bar</string>
+    <string name="settings_psi">PSI</string>
+    <string name="settings_language_section">IDIOMA</string>
+    <string name="settings_app_section">APLICACIÓN</string>
+    <string name="settings_version">Versión</string>
+    <string name="settings_obd_protocol">Protocolo OBD</string>
+    <string name="settings_ssm">Soporte SSM</string>
+    <string name="settings_ssm_enabled">Habilitado</string>
+    <string name="settings_ssm_not_supported">No compatible</string>
+</resources>

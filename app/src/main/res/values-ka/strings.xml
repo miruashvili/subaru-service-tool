@@ -1,0 +1,148 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Subaru სერვის ინსტრუმენტი</string>
+
+    <string name="nav_dashboard">დეშბორდი</string>
+    <string name="nav_sensors">სენსორები</string>
+    <string name="nav_service">სერვისი</string>
+    <string name="nav_settings">პარამეტრები</string>
+
+    <string name="sensor_rpm">ძრავის ბრუნვა</string>
+    <string name="sensor_speed">მანქანის სიჩქარე</string>
+    <string name="sensor_coolant_temp">გამაგრ. ტემპ.</string>
+    <string name="sensor_throttle">სასუნთქი პოზ.</string>
+    <string name="sensor_intake_temp">შეყვანის ჰაერი ტემპ.</string>
+    <string name="sensor_battery">ბატარეის ძაბვა</string>
+    <string name="sensor_engine_load">ძრავის დატვირთვა</string>
+    <string name="sensor_map">კოლექტ. წნევა</string>
+    <string name="sensor_maf">MAF ჰაერის ნაკადი</string>
+    <string name="sensor_fuel_level">საწვავის დონე</string>
+    <string name="sensor_fuel_trim_st">საწვავის კორ. (მოკლე)</string>
+    <string name="sensor_fuel_trim_lt">საწვავის კორ. (გრძელი)</string>
+    <string name="sensor_rel_throttle">შეფარდ. სასუნთქი პოზ.</string>
+    <string name="sensor_abs_load">აბსოლ. დატვირთვა</string>
+    <string name="sensor_run_time">მუშაობის დრო</string>
+
+    <string name="group_engine">ᲫᲠᲐᲕᲘ</string>
+    <string name="group_temperatures">ᲢᲔᲛᲞᲔᲠᲐᲢᲣᲠᲐ</string>
+    <string name="group_fuel">ᲡᲐᲬᲕᲐᲕᲘ</string>
+    <string name="group_misc">სხვა</string>
+
+    <string name="status_connected_no_faults">დაკავშირებულია · შეცდომები არ არის</string>
+    <string name="status_connected_faults">დაკავშირებულია · %1$d შეცდომა აღმოჩენილია</string>
+    <string name="status_connecting">დაკავშირება…</string>
+    <string name="status_reconnecting">ხელახალი კავშირი…</string>
+    <string name="status_not_connected">არ არის დაკავშირებული</string>
+    <string name="status_error">შეცდომა: %1$s</string>
+    <string name="connect_prompt">ცოცხალი მონაცემებისთვის მიამაგრეთ OBD ადაპტერი</string>
+
+    <string name="btn_connect">დაკავშირება</string>
+    <string name="btn_disconnect">გათიშვა</string>
+
+    <string name="diag_title">გაუმართაობის კოდების დიაგნოსტიკა</string>
+    <string name="btn_scan_system">სისტემის სკანირება</string>
+    <string name="btn_clear_all">ყველას წაშლა</string>
+    <string name="diag_idle_hint">დააჭირეთ \'სისტემის სკანირება\' ECU-დან შეცდომების წასაკითხად.</string>
+    <string name="diag_reading">შეცდომის კოდები იკითხება…</string>
+    <string name="diag_clearing">შეცდომის კოდები იშლება…</string>
+    <string name="diag_no_codes">შეცდომის კოდები არ არის — სისტემა სუფთაა.</string>
+    <string name="diag_codes_detected">%1$d შეცდომის კოდი აღმოჩენილია</string>
+    <string name="diag_unknown_code">უცნობი შეცდომის კოდი</string>
+    <string name="dtc_clear_title">წაიშალოს ყველა გაუმართაობის კოდი?</string>
+    <string name="dtc_clear_message">ეს წაშლის ECU-ში შენახულ ყველა DTC-ს. ეს მოქმედება შეუქცევადია.</string>
+    <string name="dtc_clear_confirm">ყველას წაშლა</string>
+    <string name="btn_cancel">გაუქმება</string>
+    <string name="btn_save">შენახვა</string>
+
+    <string name="proc_engine_adapt_title">ძრავის ადაპტაციის განულება</string>
+    <string name="proc_engine_adapt_desc">წაშლის ECU-ს ადაპტური საწვავის კორექციებს. საჭიროა ძრავის სამუშაოების, ინჟექტორის შეცვლის ან არარეგულარული ტრიალის შემდეგ.</string>
+    <string name="proc_engine_adapt_btn">განულების გაშვება</string>
+    <string name="proc_engine_adapt_success">ადაპტაცია გაასუფთავა. ძრავა 10 წუთი ტრიალში დტოვეთ ECU-ს გადასწავლისთვის.</string>
+    <string name="proc_engine_adapt_fail">ძრავა უნდა იყოს სამუშაო ტემპ. (≥70°C) და OBD დაკავშირებული.</string>
+    <string name="proc_throttle_title">გასაქანი სხეულის ხელახალი სწავლება</string>
+    <string name="proc_throttle_desc">განაახლებს გასაქნელის საბაზო პოზიციას. საჭიროა გასაქნელი სხეულის გასუფთავების ან შეცვლის შემდეგ.</string>
+    <string name="proc_throttle_btn">სწავლების გაშვება</string>
+    <string name="proc_throttle_success">გასაქნელი სხეულის სწავლება დასრულდა. ტრიალი სტაბილიზდება 1–2 წთ-ში.</string>
+    <string name="proc_throttle_fail">ძრავა უნდა იყოს სრულად გათბობილი (≥80°C) და მანქანა გაჩერებული.</string>
+    <string name="proc_cvt_title">CVT-ის განულება და სწავლება</string>
+    <string name="proc_cvt_desc">განაახლებს CVT-ის ადაპტური გადაცვლის ლოგიკას. საჭიროა: CVT სითხის შეცვლის, სარქვლის ბლოკის ან სოლენოიდის შეცვლის შემდეგ.</string>
+    <string name="proc_cvt_btn">CVT-ის განულების გაშვება</string>
+    <string name="proc_cvt_success">CVT-ის სწავლება დაიწყო. ფრთხილად იმართეთ 10–15 წუთი.</string>
+    <string name="proc_cvt_fail">CVT-ის განულება შეჩერდა.</string>
+    <string name="proc_cvt_no_conditions">CVT-ის განულების დაწყებამდე შეასრულეთ ყველა 5 პირობა.</string>
+    <string name="proc_step">ნაბიჯი %1$d / %2$d</string>
+
+    <string name="cvt_cond_warm">ძრავა გათბობილია (გამაგრ. ≥ 80°C)</string>
+    <string name="cvt_cond_stationary">მანქანა გაჩერებულია (სიჩქარე = 0)</string>
+    <string name="cvt_cond_idling">ძრავა ტრიალშია (600–900 rpm)</string>
+    <string name="cvt_cond_park">გადაჩართვა P (სადგომი) პოზიციაში</string>
+    <string name="cvt_cond_accessories">კონდ. და ყველა მოწყობ. გამორთულია</string>
+    <string name="cvt_conditions_label">პირობები</string>
+
+    <string name="tcv_title">TCV გამაგრ. მონიტორი</string>
+    <string name="btn_monitor">მონიტორინგი</string>
+    <string name="btn_stop">შეჩერება</string>
+    <string name="tcv_collecting">მონაცემები გროვდება…</string>
+
+    <string name="maint_title">ტექ. მომსახურების ჟურნალი</string>
+    <string name="maint_empty">სერვისის ჩანაწერები არ არის.</string>
+    <string name="btn_add">დამატება</string>
+    <string name="maint_add_title">სერვის მოვლენის ჩაწერა</string>
+    <string name="maint_type_label">სერვისის ტიპი</string>
+    <string name="maint_mileage_label">ოდომეტრი (კმ, სურვ.)</string>
+    <string name="maint_notes_label">შენიშვნები (სურვ.)</string>
+    <string name="maint_more_records">+ %1$d კიდევ</string>
+    <string name="maint_today">დღეს</string>
+    <string name="maint_yesterday">გუშინ</string>
+    <string name="maint_days_ago">%1$d დღის წინ</string>
+    <string name="maint_weeks_ago">%1$d კვირის წინ</string>
+    <string name="maint_months_ago">%1$d თვის წინ</string>
+    <string name="maint_years_ago">%1$d წლის წინ</string>
+
+    <string name="service_oil_change">ზეთის შეცვლა</string>
+    <string name="service_cvt_fluid">CVT სითხე</string>
+    <string name="service_brake_fluid">სამუხრუჭე სითხე</string>
+    <string name="service_coolant">გამაგრილებელი</string>
+    <string name="service_spark_plugs">სანთლები</string>
+    <string name="service_air_filter">ჰაერის ფილტრი</string>
+    <string name="service_tire_rotation">საბურავების როტაცია</string>
+    <string name="service_other">სხვა</string>
+
+    <string name="health_title">მანქანის ჯანმრთელობა</string>
+    <string name="issue_detected">ᲒᲐᲛᲝᲕᲚᲘᲜᲓᲐ</string>
+    <string name="issue_dtcs">DTC-ები</string>
+    <string name="issue_symptoms">სიმპტომები</string>
+    <string name="issue_fix">გამოსწორება</string>
+    <string name="issue_known">ცნობილი პრობლემა: %1$s</string>
+    <string name="issue_diagnosis">დიაგნოსტიკა</string>
+    <string name="issue_repair">შეკეთება</string>
+
+    <string name="settings_vehicle_section">ᲛᲐᲜᲥᲐᲜᲐ</string>
+    <string name="settings_vehicle_no">მანქანა არ არის კონფ.</string>
+    <string name="settings_change_vehicle">მანქანის შეცვლა</string>
+    <string name="settings_bluetooth_section">BLUETOOTH</string>
+    <string name="settings_obd_adapter">OBD ადაპტერი</string>
+    <string name="settings_obd_adapter_sub">დაუწყვილეთ Bluetooth OBD ადაპტერი</string>
+    <string name="settings_appearance_section">გარეგნობა</string>
+    <string name="settings_theme">თემა</string>
+    <string name="settings_dark">მუქი</string>
+    <string name="settings_light">ნათელი</string>
+    <string name="settings_system">სისტემა</string>
+    <string name="settings_landscape">ჰორიზ. ეკრანი</string>
+    <string name="settings_landscape_sub">დახრისას ეკრანის ბრუნვის დაშვება</string>
+    <string name="settings_units_section">ᲔᲠᲗᲔᲣᲚᲔᲑᲘ</string>
+    <string name="settings_temp_unit">ტემპერატურა</string>
+    <string name="settings_celsius">°C ცელსიუსი</string>
+    <string name="settings_fahrenheit">°F ფარენჰეიტი</string>
+    <string name="settings_press_unit">წნევა</string>
+    <string name="settings_kpa">kPa</string>
+    <string name="settings_bar">bar</string>
+    <string name="settings_psi">PSI</string>
+    <string name="settings_language_section">ᲔᲜᲐ</string>
+    <string name="settings_app_section">ᲞᲠᲝᲒᲠᲐᲛᲐ</string>
+    <string name="settings_version">ვერსია</string>
+    <string name="settings_obd_protocol">OBD პროტოკოლი</string>
+    <string name="settings_ssm">SSM მხარდაჭერა</string>
+    <string name="settings_ssm_enabled">ჩართულია</string>
+    <string name="settings_ssm_not_supported">არ არის მხარდაჭ.</string>
+</resources>

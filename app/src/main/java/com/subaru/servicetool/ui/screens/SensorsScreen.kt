@@ -40,11 +40,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.subaru.servicetool.R
 import com.subaru.servicetool.data.bluetooth.BluetoothConnectionState
+import com.subaru.servicetool.data.obd.ObdPid
+import com.subaru.servicetool.data.obd.ObdPids
 import com.subaru.servicetool.data.obd.PidGroup
 import com.subaru.servicetool.ui.sensors.SensorGroup
 import com.subaru.servicetool.ui.sensors.SensorItem
@@ -171,12 +175,20 @@ private fun SectionHeader(label: String, group: PidGroup) {
         )
         Spacer(Modifier.width(6.dp))
         Text(
-            text = label,
+            text = group.localizedLabel(),
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.SemiBold,
         )
     }
+}
+
+@Composable
+private fun PidGroup.localizedLabel(): String = when (this) {
+    PidGroup.ENGINE      -> stringResource(R.string.group_engine)
+    PidGroup.TEMPERATURE -> stringResource(R.string.group_temperatures)
+    PidGroup.FUEL        -> stringResource(R.string.group_fuel)
+    PidGroup.MISC        -> stringResource(R.string.group_misc)
 }
 
 // ── Sensor group card ─────────────────────────────────────────────────────────
@@ -213,12 +225,12 @@ private fun SensorRow(item: SensorItem) {
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = item.pid.name,
+                text = item.pid.localizedName(),
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Medium,
             )
             Text(
-                text = item.pid.unit,
+                text = item.displayUnit,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(0.45f),
             )
@@ -245,6 +257,28 @@ private fun SensorRow(item: SensorItem) {
             )
         }
     }
+}
+
+// ── Localization helpers ──────────────────────────────────────────────────────
+
+@Composable
+private fun ObdPid.localizedName(): String = when (cmd) {
+    ObdPids.RPM.cmd          -> stringResource(R.string.sensor_rpm)
+    ObdPids.SPEED.cmd        -> stringResource(R.string.sensor_speed)
+    ObdPids.COOLANT_TEMP.cmd -> stringResource(R.string.sensor_coolant_temp)
+    ObdPids.THROTTLE.cmd     -> stringResource(R.string.sensor_throttle)
+    ObdPids.INTAKE_TEMP.cmd  -> stringResource(R.string.sensor_intake_temp)
+    ObdPids.VOLTAGE.cmd      -> stringResource(R.string.sensor_battery)
+    ObdPids.ENGINE_LOAD.cmd  -> stringResource(R.string.sensor_engine_load)
+    ObdPids.MAP.cmd          -> stringResource(R.string.sensor_map)
+    ObdPids.MAF.cmd          -> stringResource(R.string.sensor_maf)
+    ObdPids.FUEL_LEVEL.cmd   -> stringResource(R.string.sensor_fuel_level)
+    ObdPids.FUEL_TRIM_ST.cmd -> stringResource(R.string.sensor_fuel_trim_st)
+    ObdPids.FUEL_TRIM_LT.cmd -> stringResource(R.string.sensor_fuel_trim_lt)
+    ObdPids.REL_THROTTLE.cmd -> stringResource(R.string.sensor_rel_throttle)
+    ObdPids.ABS_LOAD.cmd     -> stringResource(R.string.sensor_abs_load)
+    ObdPids.RUN_TIME.cmd     -> stringResource(R.string.sensor_run_time)
+    else                     -> name
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────

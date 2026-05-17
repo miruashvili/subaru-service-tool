@@ -13,6 +13,8 @@ import com.subaru.servicetool.data.obd.ObdParser
 import com.subaru.servicetool.data.obd.ObdPids
 import com.subaru.servicetool.data.obd.ObdQueryEngine
 import com.subaru.servicetool.data.preferences.UserPreferences
+import com.subaru.servicetool.data.service.ServiceEvent
+import com.subaru.servicetool.data.service.ServiceEventType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -83,7 +85,7 @@ data class TcvMonitorState(
 
 @HiltViewModel
 class ServiceViewModel @Inject constructor(
-    userPreferences: UserPreferences,
+    private val userPreferences: UserPreferences,
     val btManager: OBDBluetoothManager,
     private val obdEngine: ObdQueryEngine,
 ) : ViewModel() {
@@ -110,6 +112,12 @@ class ServiceViewModel @Inject constructor(
 
     private val _showClearConfirm = MutableStateFlow(false)
     val showClearConfirm: StateFlow<Boolean> = _showClearConfirm.asStateFlow()
+
+    val serviceLog: StateFlow<List<ServiceEvent>> = userPreferences.serviceLog
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val _showAddService = MutableStateFlow(false)
+    val showAddService: StateFlow<Boolean> = _showAddService.asStateFlow()
 
     private var procedureJob: Job? = null
     private var tcvJob: Job? = null
@@ -304,6 +312,29 @@ class ServiceViewModel @Inject constructor(
         procedureJob?.cancel()
         _procedureState.value = ProcedureState.Idle
         _activeProcedure.value = ActiveProcedure.NONE
+    }
+
+    // ── Maintenance Log ───────────────────────────────────────────────────────
+
+    fun requestAddService() { _showAddService.value = true }
+    fun dismissAddService() { _showAddService.value = false }
+
+    fun logServiceEvent(type: ServiceEventType, mileageKm: Int?, notes: String) {
+        _showAddService.value = false
+        viewModelScope.launch {
+            userPreferences.addServiceEvent(
+                ServiceEvent(
+                    type      = type,
+                    dateMs    = System.currentTimeMillis(),
+                    mileageKm = mileageKm,
+                    notes     = notes,
+                )
+            )
+        }
+    }
+
+    fun removeServiceEvent(id: String) {
+        viewModelScope.launch { userPreferences.removeServiceEvent(id) }
     }
 
     // ── TCV Monitor ───────────────────────────────────────────────────────────

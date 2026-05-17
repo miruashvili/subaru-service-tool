@@ -9,6 +9,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import com.subaru.servicetool.data.bluetooth.OBDConnectionType
 import com.subaru.servicetool.data.model.VehicleDatabase
 import com.subaru.servicetool.data.model.VehicleSpec
+import com.subaru.servicetool.data.service.ServiceEvent
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -25,6 +26,7 @@ class UserPreferences @Inject constructor(
         private val KEY_SELECTED_ENGINE  = stringPreferencesKey("selected_engine_code")
         private val KEY_LAST_DEVICE_MAC  = stringPreferencesKey("last_device_mac")
         private val KEY_LAST_DEVICE_TYPE = stringPreferencesKey("last_device_type")
+        private val KEY_SERVICE_LOG      = stringPreferencesKey("service_log")
     }
 
     val isOnboardingComplete: Flow<Boolean> = dataStore.data.map { prefs ->
@@ -55,6 +57,32 @@ class UserPreferences @Inject constructor(
         dataStore.edit { prefs ->
             prefs[KEY_LAST_DEVICE_MAC]  = mac
             prefs[KEY_LAST_DEVICE_TYPE] = type.name
+        }
+    }
+
+    val serviceLog: Flow<List<ServiceEvent>> = dataStore.data.map { prefs ->
+        (prefs[KEY_SERVICE_LOG] ?: "")
+            .split("\n")
+            .filter { it.isNotBlank() }
+            .mapNotNull { ServiceEvent.fromStorageString(it) }
+            .sortedByDescending { it.dateMs }
+    }
+
+    suspend fun addServiceEvent(event: ServiceEvent) {
+        dataStore.edit { prefs ->
+            val existing = prefs[KEY_SERVICE_LOG] ?: ""
+            val lines = existing.split("\n").filter { it.isNotBlank() }.toMutableList()
+            lines.add(0, event.toStorageString())
+            prefs[KEY_SERVICE_LOG] = lines.joinToString("\n")
+        }
+    }
+
+    suspend fun removeServiceEvent(id: String) {
+        dataStore.edit { prefs ->
+            val existing = prefs[KEY_SERVICE_LOG] ?: ""
+            val lines = existing.split("\n")
+                .filter { it.isNotBlank() && !it.startsWith("$id|") }
+            prefs[KEY_SERVICE_LOG] = lines.joinToString("\n")
         }
     }
 }

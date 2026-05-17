@@ -9,9 +9,12 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -23,15 +26,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.ElectricBolt
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -39,23 +49,28 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Thermostat
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -69,6 +84,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -77,6 +93,8 @@ import com.subaru.servicetool.data.model.IssueSeverity
 import com.subaru.servicetool.data.model.KnownIssue
 import com.subaru.servicetool.data.model.VehicleSpec
 import com.subaru.servicetool.data.model.forLocale
+import com.subaru.servicetool.data.service.ServiceEvent
+import com.subaru.servicetool.data.service.ServiceEventType
 import com.subaru.servicetool.ui.service.ActiveProcedure
 import com.subaru.servicetool.ui.service.CoolantSample
 import com.subaru.servicetool.ui.service.CvtConditions
@@ -96,13 +114,22 @@ fun ServiceScreen(
     paddingValues: PaddingValues = PaddingValues(),
     viewModel: ServiceViewModel = hiltViewModel(),
 ) {
-    val vehicle    by viewModel.selectedVehicle.collectAsState()
-    val dtcState   by viewModel.dtcScanState.collectAsState()
-    val procState  by viewModel.procedureState.collectAsState()
-    val activeProc by viewModel.activeProcedure.collectAsState()
-    val cvtConds   by viewModel.cvtConditions.collectAsState()
-    val tcvMon     by viewModel.tcvMonitor.collectAsState()
-    val showConfirm by viewModel.showClearConfirm.collectAsState()
+    val vehicle       by viewModel.selectedVehicle.collectAsState()
+    val dtcState      by viewModel.dtcScanState.collectAsState()
+    val procState     by viewModel.procedureState.collectAsState()
+    val activeProc    by viewModel.activeProcedure.collectAsState()
+    val cvtConds      by viewModel.cvtConditions.collectAsState()
+    val tcvMon        by viewModel.tcvMonitor.collectAsState()
+    val showConfirm   by viewModel.showClearConfirm.collectAsState()
+    val serviceLog    by viewModel.serviceLog.collectAsState()
+    val showAddSvc    by viewModel.showAddService.collectAsState()
+
+    if (showAddSvc) {
+        AddServiceDialog(
+            onConfirm = viewModel::logServiceEvent,
+            onDismiss = viewModel::dismissAddService,
+        )
+    }
 
     if (showConfirm) {
         AlertDialog(
@@ -127,6 +154,15 @@ fun ServiceScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item { Text("Service", style = MaterialTheme.typography.headlineMedium) }
+
+        // ── Maintenance Log ────────────────────────────────────────────────
+        item {
+            MaintenanceLogCard(
+                events    = serviceLog,
+                onAdd     = viewModel::requestAddService,
+                onRemove  = viewModel::removeServiceEvent,
+            )
+        }
 
         // ── Vehicle Health ─────────────────────────────────────────────────
         vehicle?.let { v ->
@@ -831,6 +867,232 @@ private fun InfoSection(label: String, value: String) {
     }
 }
 
+// ── Maintenance Log Card ──────────────────────────────────────────────────────
+
+@Composable
+private fun MaintenanceLogCard(
+    events: List<ServiceEvent>,
+    onAdd: () -> Unit,
+    onRemove: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(true) }
+
+    ServiceCard(title = "Maintenance Log", icon = Icons.Filled.History) {
+        if (events.isEmpty()) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "No service records yet.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(0.45f),
+                    modifier = Modifier.weight(1f),
+                )
+                Button(
+                    onClick = onAdd,
+                    colors = ButtonDefaults.buttonColors(containerColor = DarkPrimary),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                    modifier = Modifier.height(34.dp),
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Add", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "${events.size} record${if (events.size == 1) "" else "s"}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(0.45f),
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(28.dp)) {
+                    Icon(
+                        if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface.copy(0.5f),
+                        modifier = Modifier.size(18.dp),
+                    )
+                }
+                Spacer(Modifier.width(4.dp))
+                Button(
+                    onClick = onAdd,
+                    colors = ButtonDefaults.buttonColors(containerColor = DarkPrimary),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                    modifier = Modifier.height(34.dp),
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Add", style = MaterialTheme.typography.labelMedium)
+                }
+            }
+
+            AnimatedVisibility(visible = expanded,
+                enter = expandVertically() + fadeIn(),
+                exit  = shrinkVertically() + fadeOut(),
+            ) {
+                Column(modifier = Modifier.padding(top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    val shown = events.take(5)
+                    shown.forEachIndexed { idx, event ->
+                        ServiceEventRow(event = event, onRemove = { onRemove(event.id) })
+                        if (idx < shown.lastIndex) {
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.1f))
+                        }
+                    }
+                    if (events.size > 5) {
+                        Text(
+                            "+ ${events.size - 5} more records",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(0.4f),
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ServiceEventRow(event: ServiceEvent, onRemove: () -> Unit) {
+    val statusColor = when {
+        event.isOverdue() -> DarkError
+        event.isDueSoon() -> DarkWarning
+        else -> MaterialTheme.colorScheme.onSurface.copy(0.6f)
+    }
+
+    Row(
+        modifier = Modifier.padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            event.type.icon,
+            contentDescription = null,
+            tint = statusColor,
+            modifier = Modifier.size(16.dp),
+        )
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(event.type.displayName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+            Row {
+                Text(
+                    event.daysAgoLabel,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = statusColor,
+                )
+                event.mileageKm?.let {
+                    Text(
+                        " · ${"%,d".format(it)} km",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(0.45f),
+                    )
+                }
+            }
+        }
+        IconButton(onClick = onRemove, modifier = Modifier.size(28.dp)) {
+            Icon(
+                Icons.Filled.Close,
+                contentDescription = "Remove",
+                tint = MaterialTheme.colorScheme.onSurface.copy(0.3f),
+                modifier = Modifier.size(14.dp),
+            )
+        }
+    }
+}
+
+// ── Add Service Dialog ────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun AddServiceDialog(
+    onConfirm: (ServiceEventType, Int?, String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var selectedType by remember { mutableStateOf(ServiceEventType.OIL_CHANGE) }
+    var mileageText  by remember { mutableStateOf("") }
+    var notes        by remember { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Log Service Event") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                // Service type selection
+                Text("Service Type",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(0.55f))
+
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement   = Arrangement.spacedBy(4.dp),
+                ) {
+                    ServiceEventType.entries.forEach { type ->
+                        FilterChip(
+                            selected = selectedType == type,
+                            onClick  = { selectedType = type },
+                            label    = {
+                                Text(type.displayName,
+                                    style = MaterialTheme.typography.labelSmall)
+                            },
+                            leadingIcon = {
+                                Icon(type.icon, contentDescription = null,
+                                    modifier = Modifier.size(12.dp))
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = DarkPrimary.copy(0.18f),
+                                selectedLabelColor     = DarkPrimary,
+                                selectedLeadingIconColor = DarkPrimary,
+                            ),
+                        )
+                    }
+                }
+
+                // Mileage (optional)
+                OutlinedTextField(
+                    value = mileageText,
+                    onValueChange = { mileageText = it.filter { c -> c.isDigit() } },
+                    label    = { Text("Odometer (km, optional)") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    singleLine = true,
+                    modifier   = Modifier.fillMaxWidth(),
+                )
+
+                // Notes (optional)
+                OutlinedTextField(
+                    value = notes,
+                    onValueChange = { notes = it },
+                    label    = { Text("Notes (optional)") },
+                    singleLine = true,
+                    modifier   = Modifier.fillMaxWidth(),
+                )
+
+                // Interval hint
+                selectedType.intervalHint?.let { hint ->
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(0.5f),
+                        shape = RoundedCornerShape(8.dp),
+                    ) {
+                        Text(hint,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(0.55f),
+                            modifier = Modifier.padding(8.dp))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onConfirm(selectedType, mileageText.toIntOrNull(), notes.trim())
+                },
+                colors = ButtonDefaults.buttonColors(containerColor = DarkPrimary),
+            ) { Text("Save") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Cancel") }
+        },
+    )
+}
+
 // ── Extension ─────────────────────────────────────────────────────────────────
 
 private val IssueSeverity.color: Color
@@ -838,4 +1100,35 @@ private val IssueSeverity.color: Color
         IssueSeverity.CRITICAL -> DarkError
         IssueSeverity.HIGH     -> DarkWarning
         IssueSeverity.MEDIUM   -> Color(0xFF5B9BD5)
+    }
+
+private val ServiceEventType.icon: ImageVector
+    get() = when (this) {
+        ServiceEventType.OIL_CHANGE    -> Icons.Filled.WaterDrop
+        ServiceEventType.CVT_FLUID     -> Icons.Filled.Settings
+        ServiceEventType.BRAKE_FLUID   -> Icons.Filled.Speed
+        ServiceEventType.COOLANT       -> Icons.Filled.Thermostat
+        ServiceEventType.SPARK_PLUGS   -> Icons.Filled.ElectricBolt
+        ServiceEventType.AIR_FILTER    -> Icons.Filled.Air
+        ServiceEventType.TIRE_ROTATION -> Icons.Filled.DirectionsCar
+        ServiceEventType.OTHER         -> Icons.Filled.Build
+    }
+
+private val ServiceEventType.intervalHint: String?
+    get() {
+        val parts = buildList {
+            intervalKm?.let  { add("Every %,d km".format(it)) }
+            intervalDays?.let { add("every ${it / 30} months") }
+        }
+        return parts.takeIf { it.isNotEmpty() }?.joinToString(" / ")
+    }
+
+private val ServiceEvent.daysAgoLabel: String
+    get() = when (val d = daysSince) {
+        0L   -> "Today"
+        1L   -> "Yesterday"
+        in 2..13  -> "$d days ago"
+        in 14..59 -> "${d / 7} weeks ago"
+        in 60..364 -> "${d / 30} months ago"
+        else -> "${d / 365} year${if (d >= 730) "s" else ""} ago"
     }

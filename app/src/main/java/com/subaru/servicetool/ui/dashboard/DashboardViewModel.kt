@@ -5,22 +5,18 @@ import androidx.lifecycle.viewModelScope
 import com.subaru.servicetool.data.bluetooth.BluetoothConnectionState
 import com.subaru.servicetool.data.bluetooth.OBDBluetoothManager
 import com.subaru.servicetool.data.model.VehicleSpec
+import com.subaru.servicetool.data.obd.ObdPids
+import com.subaru.servicetool.data.obd.ObdQueryEngine
 import com.subaru.servicetool.data.preferences.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 import javax.inject.Inject
-import kotlin.random.Random
 
 enum class ObdConnectionState { DISCONNECTED, CONNECTING, CONNECTED, ERROR }
 
@@ -44,23 +40,12 @@ data class DashboardUiState(
     val errorMessage: String? = null,
 )
 
-private fun emptyMetrics() = listOf(
-    LiveMetric("rpm",      "Engine RPM",    "--",   "rpm",  MetricIcon.RPM),
-    LiveMetric("speed",    "Vehicle Speed", "--",   "km/h", MetricIcon.SPEED),
-    LiveMetric("coolant",  "Coolant Temp",  "--",   "°C",   MetricIcon.TEMP),
-    LiveMetric("throttle", "Throttle Pos",  "--",   "%",    MetricIcon.THROTTLE),
-    LiveMetric("voltage",  "Battery",       "--",   "V",    MetricIcon.VOLTAGE),
-    LiveMetric("intake",   "Intake Temp",   "--",   "°C",   MetricIcon.INTAKE),
-)
-
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     userPreferences: UserPreferences,
     private val bluetoothManager: OBDBluetoothManager,
+    private val obdEngine: ObdQueryEngine,
 ) : ViewModel() {
-
-    private val _metricsOverride = MutableStateFlow<List<LiveMetric>?>(null)
-    private var simulationJob: Job? = null
 
     private val selectedVehicle: StateFlow<VehicleSpec?> = userPreferences.selectedVehicle
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
@@ -68,86 +53,65 @@ class DashboardViewModel @Inject constructor(
     val uiState: StateFlow<DashboardUiState> = combine(
         selectedVehicle,
         bluetoothManager.connectionState,
-        _metricsOverride,
-    ) { vehicle, btState, metricsOverride ->
-        val obdState = when (btState) {
-            is BluetoothConnectionState.Disconnected -> ObdConnectionState.DISCONNECTED
-            is BluetoothConnectionState.Connecting   -> ObdConnectionState.CONNECTING
-            is BluetoothConnectionState.Connected    -> ObdConnectionState.CONNECTED
-            is BluetoothConnectionState.Reconnecting -> ObdConnectionState.CONNECTING
-            is BluetoothConnectionState.Error        -> ObdConnectionState.ERROR
-        }
-        val deviceName = (btState as? BluetoothConnectionState.Connected)?.deviceName
-        val errorMsg = (btState as? BluetoothConnectionState.Error)?.message
+        obdEngine.sensorValues,
+        obdEngine.dtcCount,
+    ) { vehicle, btState, sensorValues, dtcCount ->
+        val obdState = btState.toObdState()
+        val connected = obdState == ObdConnectionState.CONNECTED
         DashboardUiState(
-            vehicle = vehicle,
-            connectionState = obdState,
-            connectedDeviceName = deviceName,
-            metrics = if (obdState == ObdConnectionState.CONNECTED)
-                metricsOverride ?: emptyMetrics()
-            else emptyMetrics(),
-            errorMessage = errorMsg,
+            vehicle          = vehicle,
+            connectionState  = obdState,
+            connectedDeviceName = (btState as? BluetoothConnectionState.Connected)?.deviceName,
+            metrics          = if (connected) sensorValues.toDashboardMetrics() else emptyMetrics(),
+            dtcCount         = if (connected) dtcCount else 0,
+            errorMessage     = (btState as? BluetoothConnectionState.Error)?.message,
         )
-    }.stateIn(
-        viewModelScope,
-        SharingStarted.WhileSubscribed(5_000),
-        DashboardUiState(),
-    )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState())
 
-    // Navigate-to-bluetooth event (emitted when no last device is known)
     private val _navigateToBluetooth = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val navigateToBluetooth: SharedFlow<Unit> = _navigateToBluetooth.asSharedFlow()
 
-    init {
-        // Start simulated metrics when connected (replaced by real OBD data in Phase 5)
-        viewModelScope.launch {
-            bluetoothManager.connectionState.collect { state ->
-                if (state is BluetoothConnectionState.Connected) {
-                    startSimulation()
-                } else {
-                    simulationJob?.cancel()
-                    simulationJob = null
-                    _metricsOverride.value = null
-                }
-            }
-        }
-    }
-
     fun connect() {
-        if (bluetoothManager.lastDeviceMac != null) {
-            bluetoothManager.reconnectToLastDevice()
-        } else {
-            _navigateToBluetooth.tryEmit(Unit)
-        }
+        if (bluetoothManager.lastDeviceMac != null) bluetoothManager.reconnectToLastDevice()
+        else _navigateToBluetooth.tryEmit(Unit)
     }
 
     fun disconnect() = bluetoothManager.disconnect()
-
-    private fun startSimulation() {
-        simulationJob?.cancel()
-        simulationJob = viewModelScope.launch {
-            while (true) {
-                delay(900)
-                _metricsOverride.value = simulatedMetrics()
-            }
-        }
-    }
-
-    private fun simulatedMetrics(): List<LiveMetric> {
-        val isTurbo = selectedVehicle.value?.isTurbo ?: false
-        val rpm = Random.nextInt(750, if (isTurbo) 6500 else 7200)
-        return listOf(
-            LiveMetric("rpm",      "Engine RPM",    "%,d".format(rpm),                              "rpm",  MetricIcon.RPM,  rpm > 4000),
-            LiveMetric("speed",    "Vehicle Speed", Random.nextInt(0, 140).toString(),              "km/h", MetricIcon.SPEED),
-            LiveMetric("coolant",  "Coolant Temp",  Random.nextInt(85, 98).toString(),              "°C",   MetricIcon.TEMP),
-            LiveMetric("throttle", "Throttle Pos",  Random.nextInt(5, 85).toString(),               "%",    MetricIcon.THROTTLE),
-            LiveMetric("voltage",  "Battery",       "%.1f".format(Random.nextDouble(13.8, 14.6)),  "V",    MetricIcon.VOLTAGE),
-            LiveMetric("intake",   "Intake Temp",   Random.nextInt(20, 45).toString(),              "°C",   MetricIcon.INTAKE),
-        )
-    }
-
-    override fun onCleared() {
-        simulationJob?.cancel()
-        super.onCleared()
-    }
 }
+
+// ── Extension helpers ─────────────────────────────────────────────────────────
+
+private fun BluetoothConnectionState.toObdState() = when (this) {
+    is BluetoothConnectionState.Disconnected -> ObdConnectionState.DISCONNECTED
+    is BluetoothConnectionState.Connecting   -> ObdConnectionState.CONNECTING
+    is BluetoothConnectionState.Connected    -> ObdConnectionState.CONNECTED
+    is BluetoothConnectionState.Reconnecting -> ObdConnectionState.CONNECTING
+    is BluetoothConnectionState.Error        -> ObdConnectionState.ERROR
+}
+
+private fun Map<String, Float>.toDashboardMetrics(): List<LiveMetric> {
+    val rpm      = this[ObdPids.RPM.cmd]
+    val speed    = this[ObdPids.SPEED.cmd]
+    val coolant  = this[ObdPids.COOLANT_TEMP.cmd]
+    val throttle = this[ObdPids.THROTTLE.cmd]
+    val voltage  = this[ObdPids.VOLTAGE.cmd]
+    val intake   = this[ObdPids.INTAKE_TEMP.cmd]
+
+    return listOf(
+        LiveMetric("rpm",      "Engine RPM",    rpm?.let     { "%,.0f".format(it) } ?: "--", "rpm",  MetricIcon.RPM,      rpm != null && rpm > 4000f),
+        LiveMetric("speed",    "Vehicle Speed", speed?.let   { "%.0f".format(it)  } ?: "--", "km/h", MetricIcon.SPEED),
+        LiveMetric("coolant",  "Coolant Temp",  coolant?.let { "%.0f".format(it)  } ?: "--", "°C",   MetricIcon.TEMP),
+        LiveMetric("throttle", "Throttle Pos",  throttle?.let{ "%.0f".format(it)  } ?: "--", "%",    MetricIcon.THROTTLE),
+        LiveMetric("voltage",  "Battery",       voltage?.let { "%.1f".format(it)  } ?: "--", "V",    MetricIcon.VOLTAGE),
+        LiveMetric("intake",   "Intake Temp",   intake?.let  { "%.0f".format(it)  } ?: "--", "°C",   MetricIcon.INTAKE),
+    )
+}
+
+internal fun emptyMetrics() = listOf(
+    LiveMetric("rpm",      "Engine RPM",    "--", "rpm",  MetricIcon.RPM),
+    LiveMetric("speed",    "Vehicle Speed", "--", "km/h", MetricIcon.SPEED),
+    LiveMetric("coolant",  "Coolant Temp",  "--", "°C",   MetricIcon.TEMP),
+    LiveMetric("throttle", "Throttle Pos",  "--", "%",    MetricIcon.THROTTLE),
+    LiveMetric("voltage",  "Battery",       "--", "V",    MetricIcon.VOLTAGE),
+    LiveMetric("intake",   "Intake Temp",   "--", "°C",   MetricIcon.INTAKE),
+)

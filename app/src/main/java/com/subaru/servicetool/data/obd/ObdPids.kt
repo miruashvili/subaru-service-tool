@@ -87,6 +87,34 @@ object ObdPids {
         minVal = 0f, maxVal = 65535f, group = PidGroup.MISC,
     ) { b -> if (b.size >= 2) (b[0] * 256 + b[1]).toFloat() else null }
 
+    val AMBIENT_TEMP = ObdPid(
+        cmd = "0146", name = "Ambient Air Temp", unit = "°C",
+        minVal = -40f, maxVal = 215f, group = PidGroup.TEMPERATURE,
+    ) { b -> if (b.isNotEmpty()) (b[0] - 40).toFloat() else null }
+
+    // ── TPMS (polled every 5th round, non-standard extended PIDs) ─────────────
+    // Pressure in kPa = byte * 3 (typical OBD encoding for TPMS)
+
+    val TPMS_FL = ObdPid(
+        cmd = "01C1", name = "Tire Pressure FL", unit = "kPa",
+        minVal = 0f, maxVal = 500f, group = PidGroup.MISC,
+    ) { b -> if (b.isNotEmpty()) b[0] * 3f else null }
+
+    val TPMS_FR = ObdPid(
+        cmd = "01C2", name = "Tire Pressure FR", unit = "kPa",
+        minVal = 0f, maxVal = 500f, group = PidGroup.MISC,
+    ) { b -> if (b.isNotEmpty()) b[0] * 3f else null }
+
+    val TPMS_RL = ObdPid(
+        cmd = "01C3", name = "Tire Pressure RL", unit = "kPa",
+        minVal = 0f, maxVal = 500f, group = PidGroup.MISC,
+    ) { b -> if (b.isNotEmpty()) b[0] * 3f else null }
+
+    val TPMS_RR = ObdPid(
+        cmd = "01C4", name = "Tire Pressure RR", unit = "kPa",
+        minVal = 0f, maxVal = 500f, group = PidGroup.MISC,
+    ) { b -> if (b.isNotEmpty()) b[0] * 3f else null }
+
     // ── Grouped sets ──────────────────────────────────────────────────────────
 
     val DASHBOARD = listOf(RPM, SPEED, COOLANT_TEMP, THROTTLE, INTAKE_TEMP, VOLTAGE)
@@ -95,8 +123,13 @@ object ObdPids {
         ENGINE_LOAD, MAP, MAF,
         FUEL_LEVEL, FUEL_TRIM_ST, FUEL_TRIM_LT,
         REL_THROTTLE, ABS_LOAD, RUN_TIME,
-        OIL_TEMP,
+        OIL_TEMP, AMBIENT_TEMP,
     )
 
-    val ALL: List<ObdPid> = DASHBOARD + EXTENDED
+    val TPMS = listOf(TPMS_FL, TPMS_FR, TPMS_RL, TPMS_RR)
+
+    val ALL: List<ObdPid> = DASHBOARD + EXTENDED + TPMS
+
+    // PIDs available for gauge configuration (excludes ATRV and TPMS)
+    val CONFIGURABLE: List<ObdPid> = (DASHBOARD.filter { it.cmd != "ATRV" } + EXTENDED).distinctBy { it.cmd }
 }

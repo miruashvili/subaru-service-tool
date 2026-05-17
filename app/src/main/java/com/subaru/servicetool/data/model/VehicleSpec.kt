@@ -1,11 +1,20 @@
 package com.subaru.servicetool.data.model
 
+enum class Market { GLOBAL, JDM, EU }
+
+val Market.displayName: String get() = when (this) {
+    Market.GLOBAL -> "Global"
+    Market.JDM    -> "JDM"
+    Market.EU     -> "EU"
+}
+
 data class VehicleSpec(
     val year: Int,
     val modelName: String,
     val engineCode: String,
     val engineDisplayName: String,
     val isTurbo: Boolean,
+    val market: Market = Market.GLOBAL,
     val generation: String = "",
     val cvtType: String? = null,
     val knownIssueIds: List<String> = emptyList(),

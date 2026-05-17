@@ -146,4 +146,39 @@
     <string name="settings_ssm">SSM მხარდაჭერა</string>
     <string name="settings_ssm_enabled">ჩართულია</string>
     <string name="settings_ssm_not_supported">არ არის მხარდაჭ.</string>
+
+    <!-- Market / vehicle selection -->
+    <string name="onboarding_market_label">ბაზარი</string>
+    <string name="market_global">გლობალური</string>
+    <string name="market_jdm">JDM</string>
+    <string name="market_eu">ევროპა</string>
+
+    <!-- TPMS -->
+    <string name="tpms_title">საბურავის წნევა</string>
+    <string name="tpms_fl">წინ მარცხ.</string>
+    <string name="tpms_fr">წინ მარჯვ.</string>
+    <string name="tpms_rl">უკან მარცხ.</string>
+    <string name="tpms_rr">უკან მარჯვ.</string>
+
+    <!-- New sensors -->
+    <string name="sensor_ambient_temp">გარე ჰაერის ტემპ.</string>
+    <string name="sensor_oil_pressure">ზეთის წნევა</string>
+
+    <!-- Fuel consumption card -->
+    <string name="fuel_title">საწვავის მოხმარება</string>
+    <string name="fuel_instant">მომენტალური</string>
+    <string name="fuel_average">საშუალო</string>
+    <string name="fuel_reset">საშ. გასუფთავება</string>
+    <string name="fuel_na">—</string>
+
+    <!-- Gauge editor -->
+    <string name="gauge_edit_title">გეიჯის არჩევა</string>
+    <string name="gauge_turbo_only">მხოლოდ ტურბო</string>
+
+    <!-- ECU relearn (post-DTC clear) -->
+    <string name="ecu_relearn_title">ECU-ს ხელახალი სწავლება</string>
+    <string name="ecu_relearn_message">შეცდომის კოდები წაიშალა. ნორმალურად იმართეთ 10–15 წუთი ECU-ს თვით-სწავლების დასასრულებლად.</string>
+
+    <!-- Recommendations section -->
+    <string name="recommendations_title">რეკომენდაციები</string>
 </resources>

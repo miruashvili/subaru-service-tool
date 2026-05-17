@@ -113,6 +113,13 @@ class ServiceViewModel @Inject constructor(
     private val _showClearConfirm = MutableStateFlow(false)
     val showClearConfirm: StateFlow<Boolean> = _showClearConfirm.asStateFlow()
 
+    private val _showEcuRelearnDialog = MutableStateFlow(false)
+    val showEcuRelearnDialog: StateFlow<Boolean> = _showEcuRelearnDialog.asStateFlow()
+
+    // CVT guided relearn step: null = not in guided mode, 0-3 = steps
+    private val _cvtRelearnStep = MutableStateFlow<Int?>(null)
+    val cvtRelearnStep: StateFlow<Int?> = _cvtRelearnStep.asStateFlow()
+
     val serviceLog: StateFlow<List<ServiceEvent>> = userPreferences.serviceLog
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
@@ -227,11 +234,14 @@ class ServiceViewModel @Inject constructor(
             if (response != null && response.uppercase().contains("44")) {
                 obdEngine.requestDtcRefresh()
                 _dtcScanState.value = DtcScanState.NoCodes
+                _showEcuRelearnDialog.value = true
             } else {
                 _dtcScanState.value = DtcScanState.Error("Clear command failed — check connection")
             }
         }
     }
+
+    fun dismissEcuRelearnDialog() { _showEcuRelearnDialog.value = false }
 
     fun isDtcActive(code: String): Boolean = code in activeDtcCodes
 
@@ -252,6 +262,7 @@ class ServiceViewModel @Inject constructor(
                 ),
                 successMessage = "Adaptation cleared. Idle engine 10 min for ECU relearn.",
                 failMessage = "Engine must be at operating temperature (≥70°C) and OBD connected.",
+                onSuccess = { _showEcuRelearnDialog.value = true },
             )
         }
     }
@@ -276,7 +287,7 @@ class ServiceViewModel @Inject constructor(
         }
     }
 
-    // ── Procedure: CVT Reset & Learning ──────────────────────────────────────
+    // ── Procedure: CVT Reset & Learning (SSM4 sequence) ──────────────────────
 
     fun startCvtReset() {
         if (!_cvtConditions.value.allPassed) {
@@ -289,14 +300,34 @@ class ServiceViewModel @Inject constructor(
         procedureJob = viewModelScope.launch {
             runProcedure(
                 steps = listOf(
-                    "Validating all CVT conditions…" to { delay(600); true },
-                    "Initialising CVT learning mode…" to { delay(1500); true },
-                    "Writing initial pressure tables…" to { delay(2000); true },
+                    "Validating CVT conditions…" to { delay(600); true },
+                    "Setting TCU CAN header (ATSH 7E1)…" to { sendObd("ATSH7E1") },
+                    "Opening diagnostic session (10 01)…" to { sendObd("1001") },
+                    "Writing CVT relearn flag (2F 00 02 01 01)…" to { sendObd("2F00020101") },
+                    "Initiating guided gear cycle…" to { _cvtRelearnStep.value = 0; delay(500); true },
                 ),
-                successMessage = "CVT learning initiated. Drive gently for 10–15 min.",
-                failMessage = "CVT reset aborted.",
+                successMessage = "CVT write complete — follow the guided gear cycle.",
+                failMessage = "CVT reset aborted — check connection and conditions.",
             )
         }
+    }
+
+    /** Called by UI when user confirms each gear step (0=D, 1=R, 2=N, 3=Ignition). */
+    fun advanceCvtRelearnStep() {
+        val step = _cvtRelearnStep.value ?: return
+        if (step < 3) {
+            _cvtRelearnStep.value = step + 1
+        } else {
+            _cvtRelearnStep.value = null
+            _procedureState.value = ProcedureState.Success("CVT relearn complete. Drive gently for 10–15 min.")
+            _activeProcedure.value = ActiveProcedure.NONE
+        }
+    }
+
+    fun cancelCvtRelearn() {
+        _cvtRelearnStep.value = null
+        _procedureState.value = ProcedureState.Idle
+        _activeProcedure.value = ActiveProcedure.NONE
     }
 
     fun toggleCvtManualCondition(park: Boolean? = null, accessories: Boolean? = null) {
@@ -354,6 +385,7 @@ class ServiceViewModel @Inject constructor(
         steps: List<Pair<String, suspend () -> Boolean>>,
         successMessage: String,
         failMessage: String,
+        onSuccess: (() -> Unit)? = null,
     ) {
         for ((i, step) in steps.withIndex()) {
             _procedureState.value = ProcedureState.Running(i + 1, steps.size, step.first)
@@ -366,6 +398,7 @@ class ServiceViewModel @Inject constructor(
         }
         _procedureState.value = ProcedureState.Success(successMessage)
         _activeProcedure.value = ActiveProcedure.NONE
+        onSuccess?.invoke()
     }
 
     private suspend fun checkCondition(label: String, predicate: suspend () -> Boolean): Boolean {

@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.subaru.servicetool.data.bluetooth.OBDConnectionType
+import com.subaru.servicetool.data.model.Market
 import com.subaru.servicetool.data.model.VehicleDatabase
 import com.subaru.servicetool.data.model.VehicleSpec
 import com.subaru.servicetool.data.service.ServiceEvent
@@ -38,6 +39,12 @@ class UserPreferences @Inject constructor(
         private val KEY_PRESS_UNIT       = stringPreferencesKey("press_unit")
         private val KEY_LANGUAGE         = stringPreferencesKey("language")
         private val KEY_LANDSCAPE        = booleanPreferencesKey("landscape")
+        private val KEY_SELECTED_MARKET  = stringPreferencesKey("selected_market")
+        private val KEY_GAUGE_SLOT_0     = stringPreferencesKey("gauge_slot_0")
+        private val KEY_GAUGE_SLOT_1     = stringPreferencesKey("gauge_slot_1")
+        private val KEY_GAUGE_SLOT_2     = stringPreferencesKey("gauge_slot_2")
+        private val KEY_GAUGE_SLOT_3     = stringPreferencesKey("gauge_slot_3")
+        private val KEY_FUEL_AVG_RESET   = stringPreferencesKey("fuel_avg_reset_ts")
     }
 
     // ── Vehicle & onboarding ──────────────────────────────────────────────────
@@ -50,15 +57,17 @@ class UserPreferences @Inject constructor(
         val year   = prefs[KEY_SELECTED_YEAR]   ?: return@map null
         val model  = prefs[KEY_SELECTED_MODEL]  ?: return@map null
         val engine = prefs[KEY_SELECTED_ENGINE] ?: return@map null
-        VehicleDatabase.findVehicle(year, model, engine)
+        val market = prefs[KEY_SELECTED_MARKET]?.let { runCatching { Market.valueOf(it) }.getOrNull() } ?: Market.GLOBAL
+        VehicleDatabase.findVehicle(year, model, engine, market)
     }
 
     suspend fun saveVehicle(vehicle: VehicleSpec) {
         dataStore.edit { prefs ->
-            prefs[KEY_ONBOARDING_DONE] = true
-            prefs[KEY_SELECTED_YEAR]   = vehicle.year
-            prefs[KEY_SELECTED_MODEL]  = vehicle.modelName
-            prefs[KEY_SELECTED_ENGINE] = vehicle.engineCode
+            prefs[KEY_ONBOARDING_DONE]  = true
+            prefs[KEY_SELECTED_YEAR]    = vehicle.year
+            prefs[KEY_SELECTED_MODEL]   = vehicle.modelName
+            prefs[KEY_SELECTED_ENGINE]  = vehicle.engineCode
+            prefs[KEY_SELECTED_MARKET]  = vehicle.market.name
         }
     }
 
@@ -139,5 +148,39 @@ class UserPreferences @Inject constructor(
                 .filter { it.isNotBlank() && !it.startsWith("$id|") }
             prefs[KEY_SERVICE_LOG] = lines.joinToString("\n")
         }
+    }
+
+    // ── Gauge slots ───────────────────────────────────────────────────────────
+
+    private val defaultSlots = listOf("010C", "010D", "0105", "0111")
+
+    val gaugeSlots: Flow<List<String>> = dataStore.data.map { prefs ->
+        listOf(
+            prefs[KEY_GAUGE_SLOT_0] ?: defaultSlots[0],
+            prefs[KEY_GAUGE_SLOT_1] ?: defaultSlots[1],
+            prefs[KEY_GAUGE_SLOT_2] ?: defaultSlots[2],
+            prefs[KEY_GAUGE_SLOT_3] ?: defaultSlots[3],
+        )
+    }
+
+    suspend fun setGaugeSlot(index: Int, pidCmd: String) {
+        dataStore.edit { prefs ->
+            when (index) {
+                0 -> prefs[KEY_GAUGE_SLOT_0] = pidCmd
+                1 -> prefs[KEY_GAUGE_SLOT_1] = pidCmd
+                2 -> prefs[KEY_GAUGE_SLOT_2] = pidCmd
+                3 -> prefs[KEY_GAUGE_SLOT_3] = pidCmd
+            }
+        }
+    }
+
+    // ── Fuel avg reset timestamp ──────────────────────────────────────────────
+
+    val fuelAvgResetTs: Flow<Long> = dataStore.data.map { prefs ->
+        prefs[KEY_FUEL_AVG_RESET]?.toLongOrNull() ?: 0L
+    }
+
+    suspend fun resetFuelAvg() {
+        dataStore.edit { it[KEY_FUEL_AVG_RESET] = System.currentTimeMillis().toString() }
     }
 }

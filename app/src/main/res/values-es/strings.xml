@@ -146,4 +146,39 @@
     <string name="settings_ssm">Soporte SSM</string>
     <string name="settings_ssm_enabled">Habilitado</string>
     <string name="settings_ssm_not_supported">No compatible</string>
+
+    <!-- Market / vehicle selection -->
+    <string name="onboarding_market_label">Mercado</string>
+    <string name="market_global">Global</string>
+    <string name="market_jdm">JDM</string>
+    <string name="market_eu">Europa</string>
+
+    <!-- TPMS -->
+    <string name="tpms_title">Presión de neumáticos</string>
+    <string name="tpms_fl">Del. Izq.</string>
+    <string name="tpms_fr">Del. Der.</string>
+    <string name="tpms_rl">Tra. Izq.</string>
+    <string name="tpms_rr">Tra. Der.</string>
+
+    <!-- New sensors -->
+    <string name="sensor_ambient_temp">Temp. aire ambiente</string>
+    <string name="sensor_oil_pressure">Presión del aceite</string>
+
+    <!-- Fuel consumption card -->
+    <string name="fuel_title">Consumo de combustible</string>
+    <string name="fuel_instant">Instantáneo</string>
+    <string name="fuel_average">Promedio</string>
+    <string name="fuel_reset">Reiniciar prom.</string>
+    <string name="fuel_na">—</string>
+
+    <!-- Gauge editor -->
+    <string name="gauge_edit_title">Seleccionar indicador</string>
+    <string name="gauge_turbo_only">Solo turbo</string>
+
+    <!-- ECU relearn (post-DTC clear) -->
+    <string name="ecu_relearn_title">Se requiere reaprendizaje de la ECU</string>
+    <string name="ecu_relearn_message">Códigos de fallo borrados. Conduzca normalmente 10–15 minutos para que la ECU complete su ciclo de autoaprendizaje.</string>
+
+    <!-- Recommendations section -->
+    <string name="recommendations_title">Recomendaciones</string>
 </resources>

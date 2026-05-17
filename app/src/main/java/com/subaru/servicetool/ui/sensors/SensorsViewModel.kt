@@ -15,6 +15,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import javax.inject.Inject
 
@@ -47,6 +48,17 @@ class SensorsViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), buildGroups(emptyMap(), DisplayUnits()))
 
     val dtcCount: StateFlow<Int> = obdEngine.dtcCount
+
+    val tpmsValues: StateFlow<Map<String, Float>> = obdEngine.sensorValues
+        .map { values ->
+            mapOf(
+                "FL" to (values[ObdPids.TPMS_FL.cmd] ?: 0f),
+                "FR" to (values[ObdPids.TPMS_FR.cmd] ?: 0f),
+                "RL" to (values[ObdPids.TPMS_RL.cmd] ?: 0f),
+                "RR" to (values[ObdPids.TPMS_RR.cmd] ?: 0f),
+            )
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
 
     private fun buildGroups(values: Map<String, Float>, units: DisplayUnits): List<SensorGroup> =
         PidGroup.entries.mapNotNull { group ->

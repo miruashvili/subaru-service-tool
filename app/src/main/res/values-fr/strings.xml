@@ -146,4 +146,39 @@
     <string name="settings_ssm">Support SSM</string>
     <string name="settings_ssm_enabled">Activé</string>
     <string name="settings_ssm_not_supported">Non supporté</string>
+
+    <!-- Market / vehicle selection -->
+    <string name="onboarding_market_label">Marché</string>
+    <string name="market_global">Mondial</string>
+    <string name="market_jdm">JDM</string>
+    <string name="market_eu">Europe</string>
+
+    <!-- TPMS -->
+    <string name="tpms_title">Pression des pneus</string>
+    <string name="tpms_fl">AV G</string>
+    <string name="tpms_fr">AV D</string>
+    <string name="tpms_rl">AR G</string>
+    <string name="tpms_rr">AR D</string>
+
+    <!-- New sensors -->
+    <string name="sensor_ambient_temp">Temp. air ambiant</string>
+    <string name="sensor_oil_pressure">Pression huile</string>
+
+    <!-- Fuel consumption card -->
+    <string name="fuel_title">Consommation carburant</string>
+    <string name="fuel_instant">Instantanée</string>
+    <string name="fuel_average">Moyenne</string>
+    <string name="fuel_reset">Réinit. moy.</string>
+    <string name="fuel_na">—</string>
+
+    <!-- Gauge editor -->
+    <string name="gauge_edit_title">Choisir jauge</string>
+    <string name="gauge_turbo_only">Turbo uniquement</string>
+
+    <!-- ECU relearn (post-DTC clear) -->
+    <string name="ecu_relearn_title">Réapprentissage ECU requis</string>
+    <string name="ecu_relearn_message">Codes de défaut effacés. Conduisez normalement 10–15 minutes pour permettre à l'ECU de terminer son cycle d'apprentissage.</string>
+
+    <!-- Recommendations section -->
+    <string name="recommendations_title">Recommandations</string>
 </resources>

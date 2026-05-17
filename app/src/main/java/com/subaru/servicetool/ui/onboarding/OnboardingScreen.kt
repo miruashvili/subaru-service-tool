@@ -45,8 +45,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.subaru.servicetool.data.model.Market
 import com.subaru.servicetool.data.model.VehicleSpec
+import com.subaru.servicetool.data.model.displayName
+import com.subaru.servicetool.ui.theme.DarkPrimary
 import com.subaru.servicetool.ui.theme.DarkSuccess
+import com.subaru.servicetool.ui.theme.DarkWarning
 import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
@@ -58,11 +62,13 @@ fun OnboardingScreen(
     onComplete: () -> Unit = {},
     viewModel: OnboardingViewModel = hiltViewModel(),
 ) {
-    val selectedYear  by viewModel.selectedYear.collectAsState()
-    val selectedModel by viewModel.selectedModel.collectAsState()
-    val selectedSpec  by viewModel.selectedSpec.collectAsState()
-    val models        by viewModel.availableModels.collectAsState()
-    val specs         by viewModel.availableSpecs.collectAsState()
+    val selectedYear   by viewModel.selectedYear.collectAsState()
+    val selectedMarket by viewModel.selectedMarket.collectAsState()
+    val selectedModel  by viewModel.selectedModel.collectAsState()
+    val selectedSpec   by viewModel.selectedSpec.collectAsState()
+    val markets        by viewModel.availableMarkets.collectAsState()
+    val models         by viewModel.availableModels.collectAsState()
+    val specs          by viewModel.availableSpecs.collectAsState()
 
     Box(
         modifier = Modifier
@@ -120,6 +126,19 @@ fun OnboardingScreen(
 
             Spacer(Modifier.height(14.dp))
 
+            // ── Market ────────────────────────────────────────────────────
+            VehicleDropdown(
+                label = "Market",
+                selected = selectedMarket,
+                options = markets,
+                optionLabel = { it.displayName },
+                onSelected = viewModel::selectMarket,
+                enabled = selectedYear != null,
+                placeholder = if (selectedYear == null) "Select a year first" else "Select market",
+            )
+
+            Spacer(Modifier.height(14.dp))
+
             // ── Model ─────────────────────────────────────────────────────
             VehicleDropdown(
                 label = "Model",
@@ -127,8 +146,8 @@ fun OnboardingScreen(
                 options = models,
                 optionLabel = { it },
                 onSelected = viewModel::selectModel,
-                enabled = selectedYear != null,
-                placeholder = if (selectedYear == null) "Select a year first" else "Select model",
+                enabled = selectedMarket != null,
+                placeholder = if (selectedMarket == null) "Select a market first" else "Select model",
             )
 
             Spacer(Modifier.height(14.dp))
@@ -143,6 +162,28 @@ fun OnboardingScreen(
                 enabled = selectedModel != null,
                 placeholder = if (selectedModel == null) "Select a model first" else "Select engine",
             )
+
+            // Market badge
+            selectedMarket?.let { market ->
+                val marketColor = when (market) {
+                    Market.GLOBAL -> DarkPrimary
+                    Market.JDM    -> DarkWarning
+                    Market.EU     -> DarkSuccess
+                }
+                Spacer(Modifier.height(6.dp))
+                Surface(
+                    color = marketColor.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(8.dp),
+                ) {
+                    Text(
+                        text = market.displayName,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = marketColor,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    )
+                }
+            }
 
             Spacer(Modifier.height(20.dp))
 

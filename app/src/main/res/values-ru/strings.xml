@@ -146,4 +146,39 @@
     <string name="settings_ssm">Поддержка SSM</string>
     <string name="settings_ssm_enabled">Включена</string>
     <string name="settings_ssm_not_supported">Не поддерживается</string>
+
+    <!-- Market / vehicle selection -->
+    <string name="onboarding_market_label">Рынок</string>
+    <string name="market_global">Глобальный</string>
+    <string name="market_jdm">JDM</string>
+    <string name="market_eu">Европа</string>
+
+    <!-- TPMS -->
+    <string name="tpms_title">Давление в шинах</string>
+    <string name="tpms_fl">Пер. лев.</string>
+    <string name="tpms_fr">Пер. прав.</string>
+    <string name="tpms_rl">Зад. лев.</string>
+    <string name="tpms_rr">Зад. прав.</string>
+
+    <!-- New sensors -->
+    <string name="sensor_ambient_temp">Темп. наруж. воздуха</string>
+    <string name="sensor_oil_pressure">Давление масла</string>
+
+    <!-- Fuel consumption card -->
+    <string name="fuel_title">Расход топлива</string>
+    <string name="fuel_instant">Текущий</string>
+    <string name="fuel_average">Средний</string>
+    <string name="fuel_reset">Сбросить ср.</string>
+    <string name="fuel_na">—</string>
+
+    <!-- Gauge editor -->
+    <string name="gauge_edit_title">Выбор датчика</string>
+    <string name="gauge_turbo_only">Только турбо</string>
+
+    <!-- ECU relearn (post-DTC clear) -->
+    <string name="ecu_relearn_title">Требуется обучение ЭБУ</string>
+    <string name="ecu_relearn_message">Коды ошибок очищены. Езжайте в нормальном режиме 10–15 минут для завершения самообучения ЭБУ.</string>
+
+    <!-- Recommendations section -->
+    <string name="recommendations_title">Рекомендации</string>
 </resources>

@@ -10,8 +10,10 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -29,35 +31,45 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Air
 import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.DeviceThermostat
 import androidx.compose.material.icons.filled.DirectionsCar
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LinkOff
+import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -78,23 +90,48 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.subaru.servicetool.data.alert.TempAlertLevel
+import com.subaru.servicetool.data.model.Market
+import com.subaru.servicetool.data.model.displayName
+import com.subaru.servicetool.data.obd.ObdPid
+import com.subaru.servicetool.data.obd.ObdPids
 import com.subaru.servicetool.ui.theme.DarkError
 import com.subaru.servicetool.ui.theme.DarkPrimary
 import com.subaru.servicetool.ui.theme.DarkSuccess
 import com.subaru.servicetool.ui.theme.DarkWarning
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
     paddingValues: PaddingValues = PaddingValues(),
     onNavigateToBluetooth: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
-    val state by viewModel.uiState.collectAsState()
-    val alertLevel by viewModel.showAlertBanner.collectAsState()
-    val connectionLost by viewModel.connectionLostVisible.collectAsState()
+    val state       by viewModel.uiState.collectAsState()
+    val alertLevel  by viewModel.showAlertBanner.collectAsState()
+    val connLost    by viewModel.connectionLostVisible.collectAsState()
+    val editingSlot by viewModel.editingSlot.collectAsState()
+    val gaugeSlots  by viewModel.currentGaugeSlots.collectAsState()
+    val vehicle     by viewModel.vehicle.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.navigateToBluetooth.collect { onNavigateToBluetooth() }
+    }
+
+    // ── Gauge editor bottom sheet ─────────────────────────────────────────────
+    if (editingSlot != null) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = viewModel::closeGaugeEditor,
+            sheetState = sheetState,
+        ) {
+            GaugeSelectorSheet(
+                pids      = viewModel.configurablePids,
+                isTurbo   = vehicle?.isTurbo == true,
+                currentCmd = gaugeSlots.getOrNull(editingSlot!!) ?: "",
+                onSelect  = { pid -> viewModel.setGaugeSlot(editingSlot!!, pid.cmd) },
+                onDismiss = viewModel::closeGaugeEditor,
+            )
+        }
     }
 
     Box(
@@ -109,7 +146,12 @@ fun DashboardScreen(
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text("Dashboard", style = MaterialTheme.typography.headlineMedium)
+            // ── Top bar ───────────────────────────────────────────────────
+            DashboardTopBar(
+                connectionState = state.connectionState,
+                ambientTemp     = state.ambientTemp,
+                connectedName   = state.connectedDeviceName,
+            )
 
             // ── Alert banner ──────────────────────────────────────────────
             AlertBanner(alertLevel, onDismiss = viewModel::dismissAlert)
@@ -124,8 +166,19 @@ fun DashboardScreen(
                 onDisconnect = viewModel::disconnect,
             )
 
-            // ── Metrics grid ──────────────────────────────────────────────
-            MetricsGrid(metrics = state.metrics)
+            // ── 2×2 gauge grid ────────────────────────────────────────────
+            GaugeGrid(
+                metrics   = state.metrics,
+                onEditSlot = viewModel::openGaugeEditor,
+            )
+
+            // ── Fuel consumption card ─────────────────────────────────────
+            if (state.connectionState == ObdConnectionState.CONNECTED) {
+                FuelConsumptionCard(
+                    fuel      = state.fuelConsumption,
+                    onReset   = viewModel::resetFuelAvg,
+                )
+            }
 
             // ── DTC row ───────────────────────────────────────────────────
             DtcRow(dtcCount = state.dtcCount, connected = state.connectionState == ObdConnectionState.CONNECTED)
@@ -135,7 +188,7 @@ fun DashboardScreen(
 
         // ── Connection-lost snackbar ──────────────────────────────────────
         AnimatedVisibility(
-            visible = connectionLost,
+            visible = connLost,
             enter = slideInVertically(tween(300)) { it } + fadeIn(tween(300)),
             exit  = slideOutVertically(tween(250)) { it } + fadeOut(tween(200)),
             modifier = Modifier
@@ -151,20 +204,82 @@ fun DashboardScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Icon(
-                        Icons.Filled.Warning,
-                        contentDescription = null,
-                        tint = DarkWarning,
-                        modifier = Modifier.size(18.dp),
-                    )
+                    Icon(Icons.Filled.Warning, contentDescription = null, tint = DarkWarning, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(10.dp))
-                    Text(
-                        "Connection lost — retrying…",
+                    Text("Connection lost — retrying…",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.inverseOnSurface,
+                        color = MaterialTheme.colorScheme.inverseOnSurface)
+                }
+            }
+        }
+    }
+}
+
+// ── Top bar ───────────────────────────────────────────────────────────────────
+
+@Composable
+private fun DashboardTopBar(
+    connectionState: ObdConnectionState,
+    ambientTemp: Float?,
+    connectedName: String?,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "Dashboard",
+            style = MaterialTheme.typography.headlineMedium,
+            modifier = Modifier.weight(1f),
+        )
+
+        // Ambient temp chip
+        ambientTemp?.let { temp ->
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(0.8f),
+                shape = RoundedCornerShape(20.dp),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(
+                        Icons.Filled.DeviceThermostat, contentDescription = null,
+                        tint = when {
+                            temp > 35f -> DarkError
+                            temp > 25f -> DarkWarning
+                            temp < 5f  -> DarkPrimary
+                            else       -> DarkSuccess
+                        },
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        "%.0f°C".format(temp),
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
                     )
                 }
             }
+            Spacer(Modifier.width(8.dp))
+        }
+
+        // Connection status dot
+        val dotColor = when (connectionState) {
+            ObdConnectionState.CONNECTED   -> DarkSuccess
+            ObdConnectionState.CONNECTING  -> DarkWarning
+            ObdConnectionState.ERROR       -> DarkError
+            ObdConnectionState.DISCONNECTED -> MaterialTheme.colorScheme.onSurface.copy(0.3f)
+        }
+
+        if (connectionState == ObdConnectionState.CONNECTED) {
+            val scale by rememberInfiniteTransition(label = "top_dot").animateFloat(
+                initialValue = 1f, targetValue = 1.4f, label = "scale",
+                animationSpec = infiniteRepeatable(tween(2000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+            )
+            Box(Modifier.size(10.dp).scale(scale).clip(CircleShape).background(dotColor))
+        } else {
+            Box(Modifier.size(10.dp).clip(CircleShape).background(dotColor))
         }
     }
 }
@@ -186,8 +301,7 @@ private fun AlertBanner(level: TempAlertLevel, onDismiss: () -> Unit) {
         }
         val pulse = rememberInfiniteTransition(label = "banner_pulse")
         val bannerAlpha by pulse.animateFloat(
-            initialValue = 1f,
-            targetValue  = 0.7f,
+            initialValue = 1f, targetValue = 0.7f,
             animationSpec = infiniteRepeatable(tween(1200, easing = LinearEasing), RepeatMode.Reverse),
             label = "banner_alpha",
         )
@@ -265,6 +379,15 @@ private fun VehicleCard(state: DashboardUiState) {
                             color = DarkWarning, fontWeight = FontWeight.Bold)
                     }
                 }
+                // Market badge
+                val mktColor = v.market.badgeColor
+                Spacer(Modifier.width(4.dp))
+                Surface(color = mktColor.copy(0.15f), shape = RoundedCornerShape(6.dp)) {
+                    Text(v.market.displayName,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp),
+                        color = mktColor, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }
@@ -295,11 +418,8 @@ private fun ObdConnectionCard(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-
-            // Status dot with animation
             when (cs) {
                 ObdConnectionState.CONNECTING -> {
-                    // Alpha pulse for connecting
                     val pulse by rememberInfiniteTransition(label = "dot_pulse").animateFloat(
                         initialValue = 0.35f, targetValue = 1f, label = "alpha",
                         animationSpec = infiniteRepeatable(tween(600, easing = LinearEasing), RepeatMode.Reverse),
@@ -307,7 +427,6 @@ private fun ObdConnectionCard(
                     Box(Modifier.size(10.dp).clip(CircleShape).background(dotColor.copy(alpha = pulse)))
                 }
                 ObdConnectionState.CONNECTED -> {
-                    // Scale pulse for connected
                     val scale by rememberInfiniteTransition(label = "dot_scale").animateFloat(
                         initialValue = 1f, targetValue = 1.3f, label = "scale",
                         animationSpec = infiniteRepeatable(tween(2000, easing = FastOutSlowInEasing), RepeatMode.Reverse),
@@ -316,90 +435,68 @@ private fun ObdConnectionCard(
                 }
                 else -> Box(Modifier.size(10.dp).clip(CircleShape).background(dotColor))
             }
-
             Spacer(Modifier.width(10.dp))
-
-            // Animated label: "Connecting..." dots
             if (cs == ObdConnectionState.CONNECTING) {
                 val frame by rememberInfiniteTransition(label = "dots").animateFloat(
                     initialValue = 0f, targetValue = 4f, label = "frame",
                     animationSpec = infiniteRepeatable(tween(1200, easing = LinearEasing)),
                 )
-                Text(
-                    label + ".".repeat(frame.toInt() % 4),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.weight(1f),
-                )
+                Text(label + ".".repeat(frame.toInt() % 4), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             } else {
                 Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
             }
-
             when (cs) {
-                ObdConnectionState.CONNECTING -> {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        strokeWidth = 2.dp,
-                        color = DarkPrimary,
-                    )
+                ObdConnectionState.CONNECTING -> CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp, color = DarkPrimary)
+                ObdConnectionState.CONNECTED  -> OutlinedButton(
+                    onClick = onDisconnect,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                    modifier = Modifier.height(34.dp),
+                ) {
+                    Icon(Icons.Filled.LinkOff, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Disconnect", style = MaterialTheme.typography.labelSmall)
                 }
-                ObdConnectionState.CONNECTED -> {
-                    OutlinedButton(
-                        onClick = onDisconnect,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                        modifier = Modifier.height(34.dp),
-                    ) {
-                        Icon(Icons.Filled.LinkOff, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Disconnect", style = MaterialTheme.typography.labelSmall)
-                    }
-                }
-                else -> {
-                    Button(
-                        onClick = onConnect,
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                        modifier = Modifier.height(34.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = DarkPrimary),
-                    ) {
-                        Icon(Icons.Filled.Link, contentDescription = null, modifier = Modifier.size(14.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Connect", style = MaterialTheme.typography.labelSmall)
-                    }
+                else -> Button(
+                    onClick = onConnect,
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                    modifier = Modifier.height(34.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = DarkPrimary),
+                ) {
+                    Icon(Icons.Filled.Link, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Connect", style = MaterialTheme.typography.labelSmall)
                 }
             }
         }
     }
 }
 
-// ── Metrics grid ──────────────────────────────────────────────────────────────
+// ── 2×2 Gauge grid ────────────────────────────────────────────────────────────
 
 @Composable
-private fun MetricsGrid(metrics: List<LiveMetric>) {
+private fun GaugeGrid(metrics: List<LiveMetric>, onEditSlot: (Int) -> Unit) {
     LazyVerticalGrid(
-        columns = GridCells.Fixed(3),
-        modifier = Modifier.fillMaxWidth().height(232.dp),
+        columns = GridCells.Fixed(2),
+        modifier = Modifier.fillMaxWidth().height(300.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
         userScrollEnabled = false,
     ) {
-        items(metrics) { metric -> MetricCard(metric) }
+        itemsIndexed(metrics.take(4)) { index, metric ->
+            MetricCard(metric = metric, onEdit = { onEditSlot(index) })
+        }
     }
 }
 
 @Composable
-private fun MetricCard(metric: LiveMetric) {
-    // Overheat flash: alpha 1f→0.3f→1f at 600ms when highlight
+private fun MetricCard(metric: LiveMetric, onEdit: () -> Unit) {
     val infiniteTransition = rememberInfiniteTransition(label = "card_${metric.id}")
     val flashAlpha by infiniteTransition.animateFloat(
         initialValue = 1f,
         targetValue  = if (metric.highlight) 0.3f else 1f,
-        animationSpec = infiniteRepeatable(
-            tween(600, easing = LinearEasing),
-            RepeatMode.Reverse,
-        ),
+        animationSpec = infiniteRepeatable(tween(600, easing = LinearEasing), RepeatMode.Reverse),
         label = "flash_${metric.id}",
     )
-
-    // Arc gauge: animated fraction 0..1
     val animatedFraction by animateFloatAsState(
         targetValue = metric.fraction ?: 0f,
         animationSpec = tween(300, easing = FastOutSlowInEasing),
@@ -416,77 +513,195 @@ private fun MetricCard(metric: LiveMetric) {
         modifier = Modifier.fillMaxWidth().aspectRatio(1f).alpha(flashAlpha),
     ) {
         Box(contentAlignment = Alignment.Center) {
-            // Arc gauge drawn behind content
-            androidx.compose.foundation.Canvas(
-                modifier = Modifier.size(74.dp),
-            ) {
+            androidx.compose.foundation.Canvas(modifier = Modifier.size(100.dp)) {
                 val stroke = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round)
                 val startAngle = 150f
                 val sweepTotal = 240f
-                drawArc(
-                    color = arcBg,
-                    startAngle = startAngle,
-                    sweepAngle = sweepTotal,
-                    useCenter = false,
-                    style = stroke,
-                )
+                drawArc(color = arcBg, startAngle = startAngle, sweepAngle = sweepTotal, useCenter = false, style = stroke)
                 if (metric.fraction != null && animatedFraction > 0f) {
-                    drawArc(
-                        color = accentColor,
-                        startAngle = startAngle,
-                        sweepAngle = sweepTotal * animatedFraction,
-                        useCenter = false,
-                        style = stroke,
-                    )
+                    drawArc(color = accentColor, startAngle = startAngle, sweepAngle = sweepTotal * animatedFraction, useCenter = false, style = stroke)
                 }
             }
-
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier.padding(8.dp),
             ) {
-                Icon(
-                    imageVector = metricIcon(metric.iconRes),
-                    contentDescription = null,
-                    tint = accentColor,
-                    modifier = Modifier.size(18.dp),
-                )
+                Icon(imageVector = metricIcon(metric.iconRes), contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
                 Spacer(Modifier.height(4.dp))
                 AnimatedContent(
                     targetState = metric.value,
                     transitionSpec = { fadeIn(tween(100)) togetherWith fadeOut(tween(100)) },
                     label = metric.id,
                 ) { v ->
-                    Text(
-                        text = v,
-                        style = MaterialTheme.typography.titleMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = if (v.length > 4) 13.sp else 17.sp,
-                        ),
-                        color = accentColor,
-                        textAlign = TextAlign.Center,
-                    )
+                    Text(text = v,
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = if (v.length > 4) 13.sp else 18.sp),
+                        color = accentColor, textAlign = TextAlign.Center)
                 }
-                Text(metric.unit,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
-                Text(metric.label,
-                    style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                    color = MaterialTheme.colorScheme.onSurface.copy(0.4f),
-                    textAlign = TextAlign.Center, maxLines = 1)
+                Text(metric.unit, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
+                Text(metric.label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                    color = MaterialTheme.colorScheme.onSurface.copy(0.4f), textAlign = TextAlign.Center, maxLines = 1)
+            }
+
+            // Edit pencil button
+            IconButton(
+                onClick = onEdit,
+                modifier = Modifier.align(Alignment.TopEnd).size(28.dp),
+            ) {
+                Icon(Icons.Filled.Edit, contentDescription = "Edit gauge",
+                    tint = MaterialTheme.colorScheme.onSurface.copy(0.25f), modifier = Modifier.size(14.dp))
             }
         }
     }
 }
 
-private fun metricIcon(icon: MetricIcon): ImageVector = when (icon) {
-    MetricIcon.RPM      -> Icons.Filled.Speed
-    MetricIcon.SPEED    -> Icons.Filled.DirectionsCar
-    MetricIcon.TEMP     -> Icons.Filled.DeviceThermostat
-    MetricIcon.THROTTLE -> Icons.Filled.Tune
-    MetricIcon.VOLTAGE  -> Icons.Filled.BatteryFull
-    MetricIcon.INTAKE   -> Icons.Filled.Compress
+// ── Gauge selector bottom sheet ───────────────────────────────────────────────
+
+@Composable
+private fun GaugeSelectorSheet(
+    pids: List<ObdPid>,
+    isTurbo: Boolean,
+    currentCmd: String,
+    onSelect: (ObdPid) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Column(modifier = Modifier.padding(bottom = 32.dp)) {
+        Text(
+            "Select Sensor",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp),
+        )
+        HorizontalDivider()
+        LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
+            items(pids) { pid ->
+                val isTurboOnly = pid.cmd == ObdPids.OIL_TEMP.cmd
+                val isSelected = pid.cmd == currentCmd
+                val enabled = !isTurboOnly || isTurbo
+
+                Surface(
+                    onClick = { if (enabled) onSelect(pid) },
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = enabled,
+                    color = if (isSelected) DarkPrimary.copy(0.08f) else Color.Transparent,
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Icon(metricIcon(pid.toMetricIconEnum()), contentDescription = null,
+                            tint = if (enabled) DarkPrimary else MaterialTheme.colorScheme.onSurface.copy(0.3f),
+                            modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(14.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(pid.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(0.4f))
+                            if (isTurboOnly && !isTurbo) {
+                                Text("Turbo models only", style = MaterialTheme.typography.labelSmall, color = DarkWarning)
+                            }
+                        }
+                        Text(pid.unit, style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(0.45f))
+                        if (isSelected) {
+                            Spacer(Modifier.width(8.dp))
+                            Icon(Icons.Filled.CheckCircle, contentDescription = null, tint = DarkPrimary, modifier = Modifier.size(18.dp))
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun ObdPid.toMetricIconEnum(): MetricIcon = when (cmd) {
+    ObdPids.RPM.cmd          -> MetricIcon.RPM
+    ObdPids.SPEED.cmd        -> MetricIcon.SPEED
+    ObdPids.COOLANT_TEMP.cmd -> MetricIcon.TEMP
+    ObdPids.THROTTLE.cmd     -> MetricIcon.THROTTLE
+    ObdPids.VOLTAGE.cmd      -> MetricIcon.VOLTAGE
+    ObdPids.INTAKE_TEMP.cmd  -> MetricIcon.INTAKE
+    ObdPids.AMBIENT_TEMP.cmd -> MetricIcon.AMBIENT
+    ObdPids.FUEL_LEVEL.cmd   -> MetricIcon.FUEL
+    ObdPids.OIL_TEMP.cmd     -> MetricIcon.OIL
+    ObdPids.ENGINE_LOAD.cmd  -> MetricIcon.ENGINE_LOAD
+    ObdPids.MAP.cmd          -> MetricIcon.MAP
+    ObdPids.MAF.cmd          -> MetricIcon.MAF
+    else                     -> MetricIcon.RPM
+}
+
+// ── Fuel consumption card ─────────────────────────────────────────────────────
+
+@Composable
+private fun FuelConsumptionCard(fuel: FuelConsumptionState, onReset: () -> Unit) {
+    AnimatedVisibility(
+        visible = true,
+        enter = expandVertically() + fadeIn(),
+        exit  = shrinkVertically() + fadeOut(),
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.surface,
+            shape = RoundedCornerShape(16.dp),
+            tonalElevation = 2.dp,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.LocalGasStation, contentDescription = null,
+                        tint = DarkPrimary, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Fuel Consumption", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    OutlinedButton(
+                        onClick = onReset,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        modifier = Modifier.height(28.dp),
+                    ) {
+                        Text("Reset avg", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    FuelStatBox(
+                        label = "Instant",
+                        value = fuel.instantMpg?.let { "%.1f mpg".format(it) }
+                            ?: fuel.instantL100?.let { "%.1f L/100".format(it) }
+                            ?: "--",
+                        modifier = Modifier.weight(1f),
+                    )
+                    FuelStatBox(
+                        label = "Average (${fuel.sampleCount} samples)",
+                        value = fuel.averageMpg?.let { "%.1f mpg".format(it) }
+                            ?: fuel.averageL100?.let { "%.1f L/100".format(it) }
+                            ?: "--",
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                if (fuel.instantL100 == null) {
+                    Spacer(Modifier.height(6.dp))
+                    Text("MAF and speed data needed for fuel calculation",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(0.4f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun FuelStatBox(label: String, value: String, modifier: Modifier = Modifier) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(0.5f),
+        shape = RoundedCornerShape(10.dp),
+        modifier = modifier,
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(value, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold), color = DarkPrimary)
+            Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(0.5f), textAlign = TextAlign.Center)
+        }
+    }
 }
 
 // ── DTC fault-code row ────────────────────────────────────────────────────────
@@ -511,15 +726,36 @@ private fun DtcRow(dtcCount: Int, connected: Boolean) {
                     text = if (!connected) "Connect OBD to scan for fault codes"
                            else if (dtcCount == 0) "No fault codes detected"
                            else "$dtcCount fault code(s) detected",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
+                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium,
                 )
                 if (connected && dtcCount == 0) {
-                    Text("System nominal",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = DarkSuccess.copy(0.8f))
+                    Text("System nominal", style = MaterialTheme.typography.labelSmall, color = DarkSuccess.copy(0.8f))
                 }
             }
         }
     }
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+private fun metricIcon(icon: MetricIcon): ImageVector = when (icon) {
+    MetricIcon.RPM         -> Icons.Filled.Speed
+    MetricIcon.SPEED       -> Icons.Filled.DirectionsCar
+    MetricIcon.TEMP        -> Icons.Filled.DeviceThermostat
+    MetricIcon.THROTTLE    -> Icons.Filled.Tune
+    MetricIcon.VOLTAGE     -> Icons.Filled.BatteryFull
+    MetricIcon.INTAKE      -> Icons.Filled.Compress
+    MetricIcon.AMBIENT     -> Icons.Filled.Air
+    MetricIcon.FUEL        -> Icons.Filled.LocalGasStation
+    MetricIcon.OIL         -> Icons.Filled.WaterDrop
+    MetricIcon.ENGINE_LOAD -> Icons.Filled.Speed
+    MetricIcon.MAP         -> Icons.Filled.Compress
+    MetricIcon.MAF         -> Icons.Filled.Air
+}
+
+private val Market.badgeColor: androidx.compose.ui.graphics.Color
+    get() = when (this) {
+        Market.GLOBAL -> DarkPrimary
+        Market.JDM    -> DarkWarning
+        Market.EU     -> DarkSuccess
+    }

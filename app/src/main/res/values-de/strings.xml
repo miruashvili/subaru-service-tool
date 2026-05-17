@@ -146,4 +146,39 @@
     <string name="settings_ssm">SSM-Unterstützung</string>
     <string name="settings_ssm_enabled">Aktiviert</string>
     <string name="settings_ssm_not_supported">Nicht unterstützt</string>
+
+    <!-- Market / vehicle selection -->
+    <string name="onboarding_market_label">Markt</string>
+    <string name="market_global">Global</string>
+    <string name="market_jdm">JDM</string>
+    <string name="market_eu">Europa</string>
+
+    <!-- TPMS -->
+    <string name="tpms_title">Reifendruck</string>
+    <string name="tpms_fl">VL</string>
+    <string name="tpms_fr">VR</string>
+    <string name="tpms_rl">HL</string>
+    <string name="tpms_rr">HR</string>
+
+    <!-- New sensors -->
+    <string name="sensor_ambient_temp">Außenlufttemperatur</string>
+    <string name="sensor_oil_pressure">Öldruck</string>
+
+    <!-- Fuel consumption card -->
+    <string name="fuel_title">Kraftstoffverbrauch</string>
+    <string name="fuel_instant">Aktuell</string>
+    <string name="fuel_average">Durchschnitt</string>
+    <string name="fuel_reset">Ø zurücksetzen</string>
+    <string name="fuel_na">—</string>
+
+    <!-- Gauge editor -->
+    <string name="gauge_edit_title">Anzeige wählen</string>
+    <string name="gauge_turbo_only">Nur Turbo</string>
+
+    <!-- ECU relearn (post-DTC clear) -->
+    <string name="ecu_relearn_title">ECU-Neuanpassung erforderlich</string>
+    <string name="ecu_relearn_message">Fehlercodes gelöscht. Fahren Sie 10–15 Minuten normal, damit die ECU ihren Selbstlernzyklus abschließen kann.</string>
+
+    <!-- Recommendations section -->
+    <string name="recommendations_title">Empfehlungen</string>
 </resources>

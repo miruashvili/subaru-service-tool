@@ -177,4 +177,39 @@
     <string name="settings_ssm">SSM Support</string>
     <string name="settings_ssm_enabled">Enabled</string>
     <string name="settings_ssm_not_supported">Not supported</string>
+
+    <!-- Market / vehicle selection -->
+    <string name="onboarding_market_label">Market</string>
+    <string name="market_global">Global</string>
+    <string name="market_jdm">JDM</string>
+    <string name="market_eu">EU</string>
+
+    <!-- TPMS -->
+    <string name="tpms_title">Tire Pressure</string>
+    <string name="tpms_fl">FL</string>
+    <string name="tpms_fr">FR</string>
+    <string name="tpms_rl">RL</string>
+    <string name="tpms_rr">RR</string>
+
+    <!-- New sensors -->
+    <string name="sensor_ambient_temp">Ambient Air Temp</string>
+    <string name="sensor_oil_pressure">Oil Pressure</string>
+
+    <!-- Fuel consumption card -->
+    <string name="fuel_title">Fuel Consumption</string>
+    <string name="fuel_instant">Instant</string>
+    <string name="fuel_average">Average</string>
+    <string name="fuel_reset">Reset avg</string>
+    <string name="fuel_na">—</string>
+
+    <!-- Gauge editor -->
+    <string name="gauge_edit_title">Select Gauge</string>
+    <string name="gauge_turbo_only">Turbo only</string>
+
+    <!-- ECU relearn (post-DTC clear) -->
+    <string name="ecu_relearn_title">ECU Relearn Required</string>
+    <string name="ecu_relearn_message">Fault codes cleared. Drive normally for 10–15 minutes to allow the ECU to complete its self-relearn cycle.</string>
+
+    <!-- Recommendations section -->
+    <string name="recommendations_title">Recommendations</string>
 </resources>

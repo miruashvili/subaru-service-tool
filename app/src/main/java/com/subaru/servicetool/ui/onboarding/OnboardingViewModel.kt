@@ -2,6 +2,7 @@ package com.subaru.servicetool.ui.onboarding
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.subaru.servicetool.data.model.Market
 import com.subaru.servicetool.data.model.VehicleDatabase
 import com.subaru.servicetool.data.model.VehicleSpec
 import com.subaru.servicetool.data.preferences.UserPreferences
@@ -23,30 +24,48 @@ class OnboardingViewModel @Inject constructor(
 
     val availableYears: List<Int> = VehicleDatabase.getAvailableYears()
 
-    private val _selectedYear  = MutableStateFlow<Int?>(null)
-    private val _selectedModel = MutableStateFlow<String?>(null)
-    private val _selectedSpec  = MutableStateFlow<VehicleSpec?>(null)
+    private val _selectedYear   = MutableStateFlow<Int?>(null)
+    private val _selectedMarket = MutableStateFlow<Market?>(null)
+    private val _selectedModel  = MutableStateFlow<String?>(null)
+    private val _selectedSpec   = MutableStateFlow<VehicleSpec?>(null)
 
-    val selectedYear:  StateFlow<Int?>         = _selectedYear.asStateFlow()
-    val selectedModel: StateFlow<String?>      = _selectedModel.asStateFlow()
-    val selectedSpec:  StateFlow<VehicleSpec?> = _selectedSpec.asStateFlow()
+    val selectedYear:   StateFlow<Int?>         = _selectedYear.asStateFlow()
+    val selectedMarket: StateFlow<Market?>      = _selectedMarket.asStateFlow()
+    val selectedModel:  StateFlow<String?>      = _selectedModel.asStateFlow()
+    val selectedSpec:   StateFlow<VehicleSpec?> = _selectedSpec.asStateFlow()
+
+    val availableMarkets: StateFlow<List<Market>> = _selectedYear
+        .map { year -> year?.let { VehicleDatabase.getMarketsForYear(it) } ?: emptyList() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val availableModels: StateFlow<List<String>> = _selectedYear
-        .map { year -> year?.let { VehicleDatabase.getModelsForYear(it) } ?: emptyList() }
+        .combine(_selectedMarket) { year, market ->
+            if (year != null && market != null)
+                VehicleDatabase.getModelsForYearAndMarket(year, market)
+            else emptyList()
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val availableSpecs: StateFlow<List<VehicleSpec>> = _selectedYear
-        .combine(_selectedModel) { year, model ->
-            if (year != null && model != null) {
-                VehicleDatabase.getSpecsForYearAndModel(year, model)
-            } else emptyList()
+        .combine(_selectedMarket) { y, m -> y to m }
+        .combine(_selectedModel) { (year, market), model ->
+            if (year != null && market != null && model != null)
+                VehicleDatabase.getSpecsForYearMarketAndModel(year, market, model)
+            else emptyList()
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun selectYear(year: Int) {
-        _selectedYear.value  = year
-        _selectedModel.value = null
-        _selectedSpec.value  = null
+        _selectedYear.value   = year
+        _selectedMarket.value = null
+        _selectedModel.value  = null
+        _selectedSpec.value   = null
+    }
+
+    fun selectMarket(market: Market) {
+        _selectedMarket.value = market
+        _selectedModel.value  = null
+        _selectedSpec.value   = null
     }
 
     fun selectModel(model: String) {

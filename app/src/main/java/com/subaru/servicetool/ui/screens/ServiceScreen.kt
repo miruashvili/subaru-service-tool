@@ -120,14 +120,29 @@ fun ServiceScreen(
     val activeProc    by viewModel.activeProcedure.collectAsState()
     val cvtConds      by viewModel.cvtConditions.collectAsState()
     val tcvMon        by viewModel.tcvMonitor.collectAsState()
-    val showConfirm   by viewModel.showClearConfirm.collectAsState()
-    val serviceLog    by viewModel.serviceLog.collectAsState()
-    val showAddSvc    by viewModel.showAddService.collectAsState()
+    val showConfirm       by viewModel.showClearConfirm.collectAsState()
+    val showEcuRelearn    by viewModel.showEcuRelearnDialog.collectAsState()
+    val cvtRelearnStep    by viewModel.cvtRelearnStep.collectAsState()
+    val serviceLog        by viewModel.serviceLog.collectAsState()
+    val showAddSvc        by viewModel.showAddService.collectAsState()
 
     if (showAddSvc) {
         AddServiceDialog(
             onConfirm = viewModel::logServiceEvent,
             onDismiss = viewModel::dismissAddService,
+        )
+    }
+
+    if (showEcuRelearn) {
+        EcuRelearnDialog(onDismiss = viewModel::dismissEcuRelearnDialog)
+    }
+
+    // CVT guided gear cycle overlay
+    cvtRelearnStep?.let { step ->
+        CvtRelearnStepDialog(
+            step      = step,
+            onConfirm = viewModel::advanceCvtRelearnStep,
+            onCancel  = viewModel::cancelCvtRelearn,
         )
     }
 
@@ -229,6 +244,11 @@ fun ServiceScreen(
                 onStart  = viewModel::startCvtReset,
                 onDismiss = viewModel::resetProcedure,
             )
+        }
+
+        // ── Recommendations ────────────────────────────────────────────────
+        item {
+            RecommendationsCard()
         }
 
         item { Spacer(Modifier.height(8.dp)) }
@@ -1122,6 +1142,182 @@ private val ServiceEventType.intervalHint: String?
         }
         return parts.takeIf { it.isNotEmpty() }?.joinToString(" / ")
     }
+
+// ── ECU Relearn Dialog ────────────────────────────────────────────────────────
+
+@Composable
+private fun EcuRelearnDialog(onDismiss: () -> Unit) {
+    val msg = com.subaru.servicetool.data.model.LocalizedText(
+        en = "The ECU has cleared its stored fault codes. The vehicle will now begin an adaptive relearn process. During the first ~50 km of driving, idle quality, fuel trim, and shift behaviour may be slightly irregular. This is normal. Drive gently for the first drive cycle to allow all systems to relearn their baseline parameters.",
+        ka = "ECU-მ წაშალა შენახული გაუმართაობის კოდები. მანქანა ახლა დაიწყებს ადაპტური ხელახალი სწავლების პროცესს. პირველი ~50 კმ-ის განმავლობაში ნეიტრალური სვლა, საწვავის ტრიმი და გადართვის ქცევა შეიძლება ოდნავ არარეგულარული იყოს. ეს ნორმალურია. პირველი სამგზავრო ციკლისთვის ნელა იმართეთ, რათა ყველა სისტემამ ხელახლა ისწავლოს საბაზისო პარამეტრები.",
+        ru = "ЭБУ очистил сохранённые коды неисправностей. Автомобиль начнёт процесс адаптивного обучения. В первые ~50 км качество холостого хода, коррекция топлива и поведение при переключениях могут быть немного нестабильными — это нормально. Двигайтесь плавно, чтобы все системы смогли заново калиброваться.",
+        es = "La ECU ha borrado los códigos de falla almacenados. El vehículo iniciará un proceso de reaprendizaje adaptativo. Durante los primeros ~50 km, la ralentí, el ajuste de combustible y el comportamiento de cambio pueden ser ligeramente irregulares. Es normal. Conduzca suavemente para que todos los sistemas recalibren sus parámetros base.",
+        fr = "L'ECU a effacé les codes de défaut mémorisés. Le véhicule va maintenant démarrer un processus d'apprentissage adaptatif. Pendant les premiers ~50 km, la qualité du ralenti, la correction de carburant et le comportement de passage peuvent être légèrement irréguliers. C'est normal. Conduisez doucement pour permettre à tous les systèmes de recalibrer leurs paramètres de base.",
+        de = "Die ECU hat die gespeicherten Fehlercodes gelöscht. Das Fahrzeug startet nun einen adaptiven Lernprozess. Während der ersten ~50 km können Leerlaufqualität, Kraftstoffanpassung und Schaltverhalten leicht unregelmäßig sein. Das ist normal. Fahren Sie behutsam, damit alle Systeme ihre Basisparameter neu kalibrieren können.",
+    )
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(Icons.Filled.Info, contentDescription = null, tint = DarkPrimary) },
+        title = { Text("ECU Relearn Required") },
+        text  = { Text(msg.forLocale(), style = MaterialTheme.typography.bodySmall) },
+        confirmButton = {
+            Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = DarkPrimary)) {
+                Text("Understood")
+            }
+        },
+    )
+}
+
+// ── CVT Relearn guided gear cycle ─────────────────────────────────────────────
+
+@Composable
+private fun CvtRelearnStepDialog(step: Int, onConfirm: () -> Unit, onCancel: () -> Unit) {
+    val steps = listOf(
+        "Move gear selector to D (Drive)" to "Select Drive — then tap Done",
+        "Move gear selector to R (Reverse)" to "Select Reverse — then tap Done",
+        "Move gear selector to N (Neutral)" to "Select Neutral — then tap Done",
+        "Turn ignition OFF for 10 seconds, then back ON" to "Key off → wait 10s → key on",
+    )
+    val (title, sub) = steps.getOrNull(step) ?: return
+
+    AlertDialog(
+        onDismissRequest = onCancel,
+        icon = { Icon(Icons.Filled.Refresh, contentDescription = null, tint = DarkPrimary) },
+        title = {
+            Column {
+                Text("CVT Relearn — Step ${step + 1} of ${steps.size}",
+                    style = MaterialTheme.typography.titleMedium)
+                LinearProgressIndicator(
+                    progress = { (step + 1).toFloat() / steps.size },
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
+            }
+        },
+        text = {
+            Column {
+                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(6.dp))
+                Text(sub, style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
+            }
+        },
+        confirmButton = {
+            Button(onClick = onConfirm, colors = ButtonDefaults.buttonColors(containerColor = DarkPrimary)) {
+                Text(if (step < 3) "Done" else "Finish")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancel) { Text("Cancel") }
+        },
+    )
+}
+
+// ── Recommendations ───────────────────────────────────────────────────────────
+
+private data class Recommendation(val title: com.subaru.servicetool.data.model.LocalizedText, val body: com.subaru.servicetool.data.model.LocalizedText)
+
+private val RECOMMENDATIONS: List<Recommendation> = listOf(
+    Recommendation(
+        title = com.subaru.servicetool.data.model.LocalizedText(en = "Change CVT Fluid Every 40,000 km", ka = "CVT-ის სითხის შეცვლა ყოველ 40,000 კმ-ზე"),
+        body  = com.subaru.servicetool.data.model.LocalizedText(en = "Subaru recommends CVT fluid every 40,000 km for severe duty. Despite the 'lifetime fluid' label, degraded fluid causes solenoid wear, slip, and overheating. Use only Subaru-approved Lineartronic CVT fluid (Part: SOA427V1410).", ka = "Subaru გირჩევთ CVT-ის სითხის შეცვლას ყოველ 40,000 კმ-ზე მძიმე სამუშაო პირობებისთვის. ინარჩუნებდე Subaru-ს დამტკიცებული Lineartronic CVT სითხე."),
+    ),
+    Recommendation(
+        title = com.subaru.servicetool.data.model.LocalizedText(en = "Check and Reset TPMS After Tire Swap", ka = "TPMS-ის შემოწმება და გადაყენება საბურავის შეცვლის შემდეგ"),
+        body  = com.subaru.servicetool.data.model.LocalizedText(en = "After rotating or replacing tires, recalibrate the TPMS system: park the car, start the engine, then hold the TPMS button under the steering wheel until the light blinks twice. Drive over 50 km/h for 10 minutes to complete calibration.", ka = "საბურავის როტაციის ან შეცვლის შემდეგ, გადაყენეთ TPMS სისტემა: გააჩერეთ მანქანა, ჩართეთ ძრავა, შემდეგ დაიჭირეთ TPMS ღილაკი საჭის ქვეშ, სანამ შუქი ორჯერ ციმციმებს."),
+    ),
+    Recommendation(
+        title = com.subaru.servicetool.data.model.LocalizedText(en = "EyeSight Camera Windshield Cleaning", ka = "EyeSight კამერის მინდვრის გაწმენდა"),
+        body  = com.subaru.servicetool.data.model.LocalizedText(en = "The EyeSight stereo cameras sit behind the rearview mirror. Keep the windshield clean in that area — use a microfiber cloth and glass cleaner, never ammonia-based products. Contamination causes false alerts and disables the system.", ka = "EyeSight სტერეო კამერები მდებარეობს უკანა სარკის უკან. შეინარჩუნეთ მინდვრი სუფთა — გამოიყენეთ მიკროფიბრის ქსოვილი, არ გამოიყენოთ ამიაკის შემცველი პროდუქტები."),
+    ),
+    Recommendation(
+        title = com.subaru.servicetool.data.model.LocalizedText(en = "AWD System: Check Tire Circumference Match", ka = "AWD სისტემა: საბურავის გარშემოწერილობის შესაბამისობის შემოწმება"),
+        body  = com.subaru.servicetool.data.model.LocalizedText(en = "Subaru's symmetrical AWD is sensitive to mismatched tire sizes. Tires must be within 1/16 inch (1.6 mm) circumference of each other across all four. Replacing only one or two tires can damage the AWD center coupling and is not covered by warranty.", ka = "Subaru-ს სიმეტრიული AWD მგრძნობიარეა საბურავის ზომის შეუთავსებლობის მიმართ. ყველა ოთხი საბურავი უნდა იყოს 1.6 მმ-ის ფარგლებში ერთმანეთთან."),
+    ),
+    Recommendation(
+        title = com.subaru.servicetool.data.model.LocalizedText(en = "Spark Plugs: Use Iridium, Not Copper", ka = "სანთლები: გამოიყენეთ ირიდიუმი, არ სპილენძი"),
+        body  = com.subaru.servicetool.data.model.LocalizedText(en = "Subaru FA/FB engines require iridium spark plugs. Copper plugs may cause misfires and ECU relearn issues. OEM spec: NGK ILKAR7L11 (FA20/FB20) or DILFR6J11 (FA24). Change every 60,000 km or earlier if rough idle appears.", ka = "Subaru FA/FB ძრავები საჭიროებს ირიდიუმის სანთლებს. OEM სპეციფ.: NGK ILKAR7L11 (FA20/FB20) ან DILFR6J11 (FA24). შეცვალეთ ყოველ 60,000 კმ-ზე."),
+    ),
+    Recommendation(
+        title = com.subaru.servicetool.data.model.LocalizedText(en = "Coolant: Use Subaru Super Coolant (Blue)", ka = "გამაგრილებელი: გამოიყენეთ Subaru Super Coolant (ლურჯი)"),
+        body  = com.subaru.servicetool.data.model.LocalizedText(en = "Subaru requires its own Super Coolant (blue). Standard green antifreeze is not compatible and may damage aluminum engine components over time. Change interval: 135,000 km or 11 years, whichever comes first. Part: SOA868V9210.", ka = "Subaru საჭიროებს საკუთარ Super Coolant-ს (ლურჯი). სტანდარტული მწვანე ანტიფრიზი არ არის თავსებადი. შეცვლის ინტერვალი: 135,000 კმ ან 11 წელი."),
+    ),
+    Recommendation(
+        title = com.subaru.servicetool.data.model.LocalizedText(en = "Throttle Body Cleaning Every 60,000 km", ka = "სამხრეთის ნაწილის გაწმენდა ყოველ 60,000 კმ-ზე"),
+        body  = com.subaru.servicetool.data.model.LocalizedText(en = "Carbon buildup on the throttle plate causes rough idle and throttle response issues. Clean with a throttle body cleaner and a soft cloth. After cleaning, always perform a Throttle Body Relearn procedure (available in this app) to reset the position baseline.", ka = "ნახშირბადის დაგროვება სამხრეთის ფირფიტაზე იწვევს ნეიტრალური სვლის პრობლემებს. გაწმენდის შემდეგ, ჩაუტარეთ Throttle Body Relearn პროცედურა ამ აპლიკაციაში."),
+    ),
+    Recommendation(
+        title = com.subaru.servicetool.data.model.LocalizedText(en = "Transmission Oil Pan Magnet Check", ka = "გადამცემის ზეთის ვარდსაკიდის მაგნიტის შემოწმება"),
+        body  = com.subaru.servicetool.data.model.LocalizedText(en = "When draining CVT fluid, always inspect the drain plug magnet. A thin metallic film is normal (fine particles). Metallic chunks or shavings indicate internal wear — do not refill until you diagnose the source. This can save a CVT replacement.", ka = "CVT-ის სითხის ამოსხმისას, ყოველთვის შეამოწმეთ სარქვლის მაგნიტი. თხელი ლითონის ფენა ნორმალურია. ლითონის ნაჭრები მიუთითებს შიდა ცვეთაზე."),
+    ),
+    Recommendation(
+        title = com.subaru.servicetool.data.model.LocalizedText(en = "Oil Change: Use 0W-20 Full Synthetic Only", ka = "ზეთის შეცვლა: გამოიყენეთ 0W-20 სრულ სინთეტიკა"),
+        body  = com.subaru.servicetool.data.model.LocalizedText(en = "All FB/FA series engines require 0W-20 full synthetic oil. Using heavier viscosity oil (5W-30, 5W-40) increases oil pressure and can mask leaks. It also reduces fuel economy. Change every 6,000–8,000 km on Subaru's FB-series engines.", ka = "ყველა FB/FA სერიის ძრავა საჭიროებს 0W-20 სრულ სინთეტიკური ზეთს. შეცვალეთ ყოველ 6,000–8,000 კმ-ზე."),
+    ),
+    Recommendation(
+        title = com.subaru.servicetool.data.model.LocalizedText(en = "Brake Fluid: Change Every 2 Years", ka = "სამუხრუჭე სითხე: შეცვლა ყოველ 2 წელიწადში"),
+        body  = com.subaru.servicetool.data.model.LocalizedText(en = "Brake fluid is hygroscopic — it absorbs moisture over time, lowering its boiling point. Subaru recommends DOT 3 or DOT 4 fluid replacement every 2 years regardless of mileage. Degraded fluid can cause vapor lock and brake fade during hard stops.", ka = "სამუხრუჭე სითხე შთანთქავს ტენს და შეამცირებს დუღილის წერტილს. Subaru გირჩევს DOT 3 ან DOT 4 სითხის შეცვლას ყოველ 2 წელიწადში, მაშინაც კი, თუ გარბენი მცირეა."),
+    ),
+)
+
+@Composable
+private fun RecommendationsCard() {
+    ServiceCard(title = "Maintenance Tips", icon = Icons.Filled.Info, iconTint = DarkPrimary) {
+        Text(
+            "Subaru-specific maintenance advice",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(0.55f),
+        )
+        Spacer(Modifier.height(10.dp))
+        RECOMMENDATIONS.forEachIndexed { idx, rec ->
+            RecommendationRow(rec)
+            if (idx < RECOMMENDATIONS.lastIndex) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 6.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(0.1f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecommendationRow(rec: Recommendation) {
+    var expanded by remember { mutableStateOf(false) }
+
+    Column {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                rec.title.forLocale(),
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.weight(1f),
+            )
+            IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(28.dp)) {
+                Icon(
+                    if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface.copy(0.5f),
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
+        AnimatedVisibility(
+            visible = expanded,
+            enter = expandVertically() + fadeIn(),
+            exit  = shrinkVertically() + fadeOut(),
+        ) {
+            Text(
+                rec.body.forLocale(),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(0.7f),
+                modifier = Modifier.padding(top = 6.dp, bottom = 4.dp),
+            )
+        }
+    }
+}
 
 private val ServiceEvent.daysAgoLabel: String
     get() = when (val d = daysSince) {

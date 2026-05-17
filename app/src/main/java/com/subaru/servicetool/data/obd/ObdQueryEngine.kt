@@ -87,6 +87,16 @@ class ObdQueryEngine @Inject constructor(
                     }
                 }
 
+                // TPMS PIDs — polled every 5th round (changes slowly)
+                if (round % 5 == 0) {
+                    for (pid in ObdPids.TPMS) {
+                        if (!isConnected()) break
+                        val v = queryPid(pid) ?: continue
+                        current[pid.cmd] = v
+                        _sensorValues.value = current.toMap()
+                    }
+                }
+
                 round++
             }
         }

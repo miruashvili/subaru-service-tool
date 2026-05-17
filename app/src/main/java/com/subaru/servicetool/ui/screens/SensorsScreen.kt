@@ -10,7 +10,12 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -56,6 +61,7 @@ import com.subaru.servicetool.data.bluetooth.BluetoothConnectionState
 import com.subaru.servicetool.data.obd.ObdPid
 import com.subaru.servicetool.data.obd.ObdPids
 import com.subaru.servicetool.data.obd.PidGroup
+import kotlin.math.min
 import com.subaru.servicetool.ui.sensors.SensorGroup
 import com.subaru.servicetool.ui.sensors.SensorItem
 import com.subaru.servicetool.ui.sensors.SensorsViewModel
@@ -125,6 +131,13 @@ fun SensorsScreen(
                 }
             }
             return@LazyColumn
+        }
+
+        // ── TPMS widget ───────────────────────────────────────────────────
+        item(key = "tpms") {
+            val tpms by viewModel.tpmsValues.collectAsState()
+            TpmsWidget(tpms)
+            Spacer(Modifier.height(4.dp))
         }
 
         // ── Sensor groups ─────────────────────────────────────────────────
@@ -341,6 +354,93 @@ private fun SkeletonGroupCard() {
                     Box(modifier = Modifier.height(12.dp).fillMaxWidth(0.45f).background(shimmerColor, RoundedCornerShape(4.dp)))
                     Box(modifier = Modifier.height(16.dp).width(56.dp).background(shimmerColor, RoundedCornerShape(4.dp)))
                 }
+            }
+        }
+    }
+}
+
+// ── TPMS Widget ───────────────────────────────────────────────────────────────
+
+@Composable
+private fun TpmsWidget(tpms: Map<String, Float>) {
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(14.dp),
+        tonalElevation = 2.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Filled.Speed, contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(6.dp))
+                Text("TIRE PRESSURE", style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.height(10.dp))
+
+            // Car silhouette with 4 tire positions
+            Box(modifier = Modifier.fillMaxWidth().height(120.dp)) {
+                val surfaceColor = MaterialTheme.colorScheme.onSurface.copy(0.15f)
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val w = size.width
+                    val h = size.height
+                    // Simple car outline (top-down)
+                    val carLeft  = w * 0.3f; val carRight = w * 0.7f
+                    val carTop   = h * 0.15f; val carBot   = h * 0.85f
+                    val rw = (carRight - carLeft) * 0.18f
+                    val rh = (carBot - carTop) * 0.15f
+                    // Car body
+                    drawRoundRect(
+                        color = surfaceColor,
+                        topLeft = Offset(carLeft, carTop),
+                        size = Size(carRight - carLeft, carBot - carTop),
+                        cornerRadius = CornerRadius(12.dp.toPx()),
+                    )
+                }
+                // 4 tire badges
+                TireBadge("FL", tpms["FL"] ?: 0f, Modifier.align(Alignment.TopStart))
+                TireBadge("FR", tpms["FR"] ?: 0f, Modifier.align(Alignment.TopEnd))
+                TireBadge("RL", tpms["RL"] ?: 0f, Modifier.align(Alignment.BottomStart))
+                TireBadge("RR", tpms["RR"] ?: 0f, Modifier.align(Alignment.BottomEnd))
+            }
+            if (tpms.values.all { it == 0f }) {
+                Spacer(Modifier.height(6.dp))
+                Text("TPMS data unavailable (not supported on all vehicles)",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(0.4f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun TireBadge(label: String, kpa: Float, modifier: Modifier = Modifier) {
+    val bar = kpa / 100f
+    val color = when {
+        kpa == 0f    -> MaterialTheme.colorScheme.onSurface.copy(0.3f)
+        bar < 1.5f   -> DarkWarning
+        bar < 1.0f   -> DarkError
+        bar > 3.5f   -> Color(0xFFFF9800)
+        else         -> DarkSuccess
+    }
+    Surface(
+        color = color.copy(0.15f),
+        shape = RoundedCornerShape(8.dp),
+        modifier = modifier.padding(4.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Text(label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp), color = color)
+            Text(
+                if (kpa == 0f) "--" else "%.1f".format(bar),
+                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                color = color,
+            )
+            if (kpa != 0f) {
+                Text("bar", style = MaterialTheme.typography.labelSmall.copy(fontSize = 8.sp), color = color.copy(0.7f))
             }
         }
     }

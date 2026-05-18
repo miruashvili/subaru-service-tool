@@ -41,7 +41,7 @@ data class LiveMetric(
     val fraction: Float? = null,  // 0..1 for arc gauge, null when no data
 )
 
-enum class MetricIcon { RPM, SPEED, TEMP, THROTTLE, VOLTAGE, INTAKE, FUEL, OIL, AMBIENT, ENGINE_LOAD, MAP, MAF }
+enum class MetricIcon { RPM, SPEED, TEMP, THROTTLE, VOLTAGE, INTAKE, FUEL, OIL, AMBIENT, ENGINE_LOAD, MAP, MAF, CVT }
 
 data class FuelConsumptionState(
     val instantL100: Float? = null,
@@ -75,7 +75,7 @@ class DashboardViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val gaugeSlots: StateFlow<List<String>> = userPreferences.gaugeSlots
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf("010C", "010D", "0105", "0111"))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf("0105", "015D", "010C", "010D"))
 
     private val _editingSlot = MutableStateFlow<Int?>(null)
     val editingSlot: StateFlow<Int?> = _editingSlot.asStateFlow()
@@ -111,7 +111,7 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    private val defaultSlots = listOf("010C", "010D", "0105", "0111")
+    private val defaultSlots = listOf("0105", "015D", "010C", "010D")
 
     private val slotsAndUnits: Flow<Pair<List<String>, DisplayUnits>> =
         gaugeSlots.combine(userPreferences.displayUnits) { slots, units -> slots to units }
@@ -317,6 +317,7 @@ private fun ObdPid.toMetricIcon(): MetricIcon = when (cmd) {
     ObdPids.AMBIENT_TEMP.cmd -> MetricIcon.AMBIENT
     ObdPids.FUEL_LEVEL.cmd   -> MetricIcon.FUEL
     ObdPids.OIL_TEMP.cmd     -> MetricIcon.OIL
+    ObdPids.CVT_TEMP.cmd     -> MetricIcon.CVT
     ObdPids.ENGINE_LOAD.cmd  -> MetricIcon.ENGINE_LOAD
     ObdPids.MAP.cmd          -> MetricIcon.MAP
     ObdPids.MAF.cmd          -> MetricIcon.MAF

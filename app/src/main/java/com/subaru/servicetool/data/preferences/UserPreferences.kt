@@ -152,7 +152,7 @@ class UserPreferences @Inject constructor(
 
     // ── Gauge slots ───────────────────────────────────────────────────────────
 
-    private val defaultSlots = listOf("010C", "010D", "0105", "0111")
+    private val defaultSlots = listOf("0105", "015D", "010C", "010D")
 
     val gaugeSlots: Flow<List<String>> = dataStore.data.map { prefs ->
         listOf(

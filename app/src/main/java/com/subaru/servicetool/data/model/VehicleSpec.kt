@@ -20,4 +20,7 @@ data class VehicleSpec(
     val knownIssueIds: List<String> = emptyList(),
     val obdProtocol: String = "ISO 15765-4 CAN 11bit 500kbps",
     val ssmSupported: Boolean = true,
-)
+) {
+    val generationBadge: String
+        get() = Regex("\\(([^)]+)\\)").find(generation)?.groupValues?.get(1) ?: generation
+}

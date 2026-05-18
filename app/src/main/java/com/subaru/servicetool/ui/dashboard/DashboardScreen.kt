@@ -33,9 +33,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -473,21 +470,26 @@ private fun ObdConnectionCard(
 
 @Composable
 private fun GaugeGrid(metrics: List<LiveMetric>, onEditSlot: (Int) -> Unit) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        modifier = Modifier.fillMaxWidth().height(300.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        userScrollEnabled = false,
-    ) {
-        itemsIndexed(metrics.take(4)) { index, metric ->
-            MetricCard(metric = metric, onEdit = { onEditSlot(index) })
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            MetricCard(metric = metrics.getOrElse(0) { metrics[0] }, onEdit = { onEditSlot(0) }, modifier = Modifier.weight(1f))
+            MetricCard(metric = metrics.getOrElse(1) { metrics[0] }, onEdit = { onEditSlot(1) }, modifier = Modifier.weight(1f))
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            MetricCard(metric = metrics.getOrElse(2) { metrics[0] }, onEdit = { onEditSlot(2) }, modifier = Modifier.weight(1f))
+            MetricCard(metric = metrics.getOrElse(3) { metrics[0] }, onEdit = { onEditSlot(3) }, modifier = Modifier.weight(1f))
         }
     }
 }
 
 @Composable
-private fun MetricCard(metric: LiveMetric, onEdit: () -> Unit) {
+private fun MetricCard(metric: LiveMetric, onEdit: () -> Unit, modifier: Modifier = Modifier) {
     val infiniteTransition = rememberInfiniteTransition(label = "card_${metric.id}")
     val flashAlpha by infiniteTransition.animateFloat(
         initialValue = 1f,
@@ -508,7 +510,7 @@ private fun MetricCard(metric: LiveMetric, onEdit: () -> Unit) {
         color = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(14.dp),
         tonalElevation = 2.dp,
-        modifier = Modifier.fillMaxWidth().aspectRatio(1f).alpha(flashAlpha),
+        modifier = modifier.aspectRatio(1f).alpha(flashAlpha),
     ) {
         Box(contentAlignment = Alignment.Center) {
             androidx.compose.foundation.Canvas(modifier = Modifier.size(100.dp)) {
@@ -615,6 +617,7 @@ private fun ObdPid.toMetricIconEnum(): MetricIcon = when (cmd) {
     ObdPids.AMBIENT_TEMP.cmd -> MetricIcon.AMBIENT
     ObdPids.FUEL_LEVEL.cmd   -> MetricIcon.FUEL
     ObdPids.OIL_TEMP.cmd     -> MetricIcon.OIL
+    ObdPids.CVT_TEMP.cmd     -> MetricIcon.CVT
     ObdPids.ENGINE_LOAD.cmd  -> MetricIcon.ENGINE_LOAD
     ObdPids.MAP.cmd          -> MetricIcon.MAP
     ObdPids.MAF.cmd          -> MetricIcon.MAF
@@ -739,6 +742,7 @@ private fun metricIcon(icon: MetricIcon): ImageVector = when (icon) {
     MetricIcon.AMBIENT     -> Icons.Filled.Air
     MetricIcon.FUEL        -> Icons.Filled.LocalGasStation
     MetricIcon.OIL         -> Icons.Filled.WaterDrop
+    MetricIcon.CVT         -> Icons.Filled.WaterDrop
     MetricIcon.ENGINE_LOAD -> Icons.Filled.Speed
     MetricIcon.MAP         -> Icons.Filled.Compress
     MetricIcon.MAF         -> Icons.Filled.Air

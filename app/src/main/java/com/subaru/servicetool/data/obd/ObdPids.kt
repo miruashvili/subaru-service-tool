@@ -34,6 +34,11 @@ object ObdPids {
         minVal = -40f, maxVal = 215f, group = PidGroup.TEMPERATURE,
     ) { b -> if (b.isNotEmpty()) (b[0] - 40).toFloat() else null }
 
+    val CVT_TEMP = ObdPid(
+        cmd = "015D", name = "CVT Fluid Temp", unit = "°C",
+        minVal = -40f, maxVal = 215f, group = PidGroup.TEMPERATURE,
+    ) { b -> if (b.isNotEmpty()) (b[0] - 40).toFloat() else null }
+
     // ATRV is an ELM327 AT command, not a standard PID; parsed via ObdParser.parseVoltage
     val VOLTAGE = ObdPid(
         cmd = "ATRV", name = "Battery Voltage", unit = "V",
@@ -123,7 +128,7 @@ object ObdPids {
         ENGINE_LOAD, MAP, MAF,
         FUEL_LEVEL, FUEL_TRIM_ST, FUEL_TRIM_LT,
         REL_THROTTLE, ABS_LOAD, RUN_TIME,
-        OIL_TEMP, AMBIENT_TEMP,
+        OIL_TEMP, CVT_TEMP, AMBIENT_TEMP,
     )
 
     val TPMS = listOf(TPMS_FL, TPMS_FR, TPMS_RL, TPMS_RR)

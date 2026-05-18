@@ -180,5 +180,27 @@
     <string name="ecu_relearn_message">Códigos de fallo borrados. Conduzca normalmente 10–15 minutos para que la ECU complete su ciclo de autoaprendizaje.</string>
 
     <!-- Recommendations section -->
-    <string name="recommendations_title">Recomendaciones</string>
+    <string name="recommendations_title">Consejos de mantenimiento</string>
+
+    <!-- Maintenance tips -->
+    <string name="tip_1_title">Cambiar el fluido CVT cada 40.000 km</string>
+    <string name="tip_1_body">Subaru recomienda cambiar el fluido CVT cada 40.000 km en uso severo. A pesar de la etiqueta \'fluido de por vida\', el fluido degradado causa desgaste del solenoide, deslizamiento y sobrecalentamiento. Use solo el fluido CVT Lineartronic aprobado por Subaru (Pieza: SOA427V1410).</string>
+    <string name="tip_2_title">Verificar y restablecer el TPMS tras el cambio de neumáticos</string>
+    <string name="tip_2_body">Tras rotar o reemplazar los neumáticos, recalibrar el TPMS: aparcar el coche, arrancar el motor, luego mantener pulsado el botón TPMS bajo el volante hasta que la luz parpadee dos veces. Conducir a más de 50 km/h durante 10 minutos para completar la calibración.</string>
+    <string name="tip_3_title">Limpieza del parabrisas de la cámara EyeSight</string>
+    <string name="tip_3_body">Las cámaras estéreo EyeSight están detrás del espejo retrovisor. Mantener limpio el parabrisas en esa zona — usar un paño de microfibra y limpiador de cristales, nunca productos a base de amoníaco. La contaminación provoca falsas alertas y desactiva el sistema.</string>
+    <string name="tip_4_title">Sistema AWD: verificar coincidencia de circunferencia de neumáticos</string>
+    <string name="tip_4_body">El AWD simétrico de Subaru es sensible a las diferencias de tamaño de los neumáticos. Los cuatro neumáticos deben estar dentro de 1,6 mm de circunferencia entre sí. Reemplazar solo uno o dos neumáticos puede dañar el acoplamiento central AWD y no está cubierto por la garantía.</string>
+    <string name="tip_5_title">Bujías: usar iridio, no cobre</string>
+    <string name="tip_5_body">Los motores Subaru FA/FB requieren bujías de iridio. Las bujías de cobre pueden causar fallos de encendido y problemas de reaprendizaje de la ECU. Especificación OEM: NGK ILKAR7L11 (FA20/FB20) o DILFR6J11 (FA24). Cambiar cada 60.000 km o antes si aparece marcha en vacío irregular.</string>
+    <string name="tip_6_title">Refrigerante: usar Subaru Super Coolant (azul)</string>
+    <string name="tip_6_body">Subaru requiere su propio Super Coolant (azul). El anticongelante verde estándar no es compatible y puede dañar los componentes de aluminio del motor con el tiempo. Intervalo de cambio: 135.000 km u 11 años, lo que ocurra primero. Pieza: SOA868V9210.</string>
+    <string name="tip_7_title">Limpieza del cuerpo de aceleración cada 60.000 km</string>
+    <string name="tip_7_body">La acumulación de carbono en el plato del acelerador causa marcha en vacío irregular y problemas de respuesta del acelerador. Limpiar con un limpiador de cuerpo de aceleración y un paño suave. Después de limpiar, realizar siempre el procedimiento Throttle Body Relearn (disponible en esta app) para restablecer la posición base.</string>
+    <string name="tip_8_title">Verificación del imán del cárter de transmisión</string>
+    <string name="tip_8_body">Al drenar el fluido CVT, inspeccionar siempre el imán del tapón de drenaje. Una fina película metálica es normal (partículas finas). Fragmentos o virutas metálicas indican desgaste interno — no rellenar hasta diagnosticar la fuente. Esto puede evitar el reemplazo del CVT.</string>
+    <string name="tip_9_title">Cambio de aceite: usar solo 0W-20 sintético completo</string>
+    <string name="tip_9_body">Todos los motores de la serie FB/FA requieren aceite sintético completo 0W-20. Usar aceite de mayor viscosidad (5W-30, 5W-40) aumenta la presión del aceite y puede enmascarar fugas. También reduce la economía de combustible. Cambiar cada 6.000–8.000 km en los motores de la serie FB de Subaru.</string>
+    <string name="tip_10_title">Líquido de frenos: cambiar cada 2 años</string>
+    <string name="tip_10_body">El líquido de frenos es higroscópico — absorbe humedad con el tiempo, bajando su punto de ebullición. Subaru recomienda reemplazar el fluido DOT 3 o DOT 4 cada 2 años independientemente del kilometraje. El fluido degradado puede causar bloqueo de vapor y fading de frenos durante frenadas fuertes.</string>
 </resources>

@@ -211,5 +211,27 @@
     <string name="ecu_relearn_message">Fault codes cleared. Drive normally for 10–15 minutes to allow the ECU to complete its self-relearn cycle.</string>
 
     <!-- Recommendations section -->
-    <string name="recommendations_title">Recommendations</string>
+    <string name="recommendations_title">Maintenance Tips</string>
+
+    <!-- Maintenance tips -->
+    <string name="tip_1_title">Change CVT Fluid Every 40,000 km</string>
+    <string name="tip_1_body">Subaru recommends CVT fluid every 40,000 km for severe duty. Despite the \'lifetime fluid\' label, degraded fluid causes solenoid wear, slip, and overheating. Use only Subaru-approved Lineartronic CVT fluid (Part: SOA427V1410).</string>
+    <string name="tip_2_title">Check and Reset TPMS After Tire Swap</string>
+    <string name="tip_2_body">After rotating or replacing tires, recalibrate the TPMS system: park the car, start the engine, then hold the TPMS button under the steering wheel until the light blinks twice. Drive over 50 km/h for 10 minutes to complete calibration.</string>
+    <string name="tip_3_title">EyeSight Camera Windshield Cleaning</string>
+    <string name="tip_3_body">The EyeSight stereo cameras sit behind the rearview mirror. Keep the windshield clean in that area — use a microfiber cloth and glass cleaner, never ammonia-based products. Contamination causes false alerts and disables the system.</string>
+    <string name="tip_4_title">AWD System: Check Tire Circumference Match</string>
+    <string name="tip_4_body">Subaru\'s symmetrical AWD is sensitive to mismatched tire sizes. Tires must be within 1/16 inch (1.6 mm) circumference of each other across all four. Replacing only one or two tires can damage the AWD center coupling and is not covered by warranty.</string>
+    <string name="tip_5_title">Spark Plugs: Use Iridium, Not Copper</string>
+    <string name="tip_5_body">Subaru FA/FB engines require iridium spark plugs. Copper plugs may cause misfires and ECU relearn issues. OEM spec: NGK ILKAR7L11 (FA20/FB20) or DILFR6J11 (FA24). Change every 60,000 km or earlier if rough idle appears.</string>
+    <string name="tip_6_title">Coolant: Use Subaru Super Coolant (Blue)</string>
+    <string name="tip_6_body">Subaru requires its own Super Coolant (blue). Standard green antifreeze is not compatible and may damage aluminum engine components over time. Change interval: 135,000 km or 11 years, whichever comes first. Part: SOA868V9210.</string>
+    <string name="tip_7_title">Throttle Body Cleaning Every 60,000 km</string>
+    <string name="tip_7_body">Carbon buildup on the throttle plate causes rough idle and throttle response issues. Clean with a throttle body cleaner and a soft cloth. After cleaning, always perform a Throttle Body Relearn procedure (available in this app) to reset the position baseline.</string>
+    <string name="tip_8_title">Transmission Oil Pan Magnet Check</string>
+    <string name="tip_8_body">When draining CVT fluid, always inspect the drain plug magnet. A thin metallic film is normal (fine particles). Metallic chunks or shavings indicate internal wear — do not refill until you diagnose the source. This can save a CVT replacement.</string>
+    <string name="tip_9_title">Oil Change: Use 0W-20 Full Synthetic Only</string>
+    <string name="tip_9_body">All FB/FA series engines require 0W-20 full synthetic oil. Using heavier viscosity oil (5W-30, 5W-40) increases oil pressure and can mask leaks. It also reduces fuel economy. Change every 6,000–8,000 km on Subaru\'s FB-series engines.</string>
+    <string name="tip_10_title">Brake Fluid: Change Every 2 Years</string>
+    <string name="tip_10_body">Brake fluid is hygroscopic — it absorbs moisture over time, lowering its boiling point. Subaru recommends DOT 3 or DOT 4 fluid replacement every 2 years regardless of mileage. Degraded fluid can cause vapor lock and brake fade during hard stops.</string>
 </resources>

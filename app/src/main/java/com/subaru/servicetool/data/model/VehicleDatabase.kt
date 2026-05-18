@@ -78,7 +78,7 @@ object VehicleDatabase {
             knownIssueIds = listOf("CVT_AWD_SOLENOID", "CVT_LOCKUP_SOLENOID")))
         addAll(gen(2019..2024, "Forester", "FB25",    "2.5L DOHC NA", false,
             generation = "Gen 4 (SK)", cvtType = "TR580",
-            knownIssueIds = listOf("TCV_THERMOSTAT", "CVT_AWD_SOLENOID")))
+            knownIssueIds = listOf("TCV_THERMOSTAT")))
         addAll(gen(2025..2026, "Forester", "FB25",    "2.5L DOHC NA", false,
             generation = "Gen 5 (SN)", cvtType = "TR580"))
 

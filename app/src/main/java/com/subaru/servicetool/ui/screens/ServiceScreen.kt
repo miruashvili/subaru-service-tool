@@ -74,6 +74,9 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.res.stringResource
+import com.subaru.servicetool.R
+import com.subaru.servicetool.data.bluetooth.BluetoothConnectionState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -114,12 +117,14 @@ fun ServiceScreen(
     paddingValues: PaddingValues = PaddingValues(),
     viewModel: ServiceViewModel = hiltViewModel(),
 ) {
-    val vehicle       by viewModel.selectedVehicle.collectAsState()
-    val dtcState      by viewModel.dtcScanState.collectAsState()
-    val procState     by viewModel.procedureState.collectAsState()
-    val activeProc    by viewModel.activeProcedure.collectAsState()
-    val cvtConds      by viewModel.cvtConditions.collectAsState()
-    val tcvMon        by viewModel.tcvMonitor.collectAsState()
+    val vehicle           by viewModel.selectedVehicle.collectAsState()
+    val dtcState          by viewModel.dtcScanState.collectAsState()
+    val procState         by viewModel.procedureState.collectAsState()
+    val activeProc        by viewModel.activeProcedure.collectAsState()
+    val cvtConds          by viewModel.cvtConditions.collectAsState()
+    val tcvMon            by viewModel.tcvMonitor.collectAsState()
+    val connectionState   by viewModel.connectionState.collectAsState()
+    val isConnected       = connectionState is BluetoothConnectionState.Connected
     val showConfirm       by viewModel.showClearConfirm.collectAsState()
     val showEcuRelearn    by viewModel.showEcuRelearnDialog.collectAsState()
     val cvtRelearnStep    by viewModel.cvtRelearnStep.collectAsState()
@@ -177,20 +182,6 @@ fun ServiceScreen(
                 onAdd     = viewModel::requestAddService,
                 onRemove  = viewModel::removeServiceEvent,
             )
-        }
-
-        // ── Vehicle Health ─────────────────────────────────────────────────
-        vehicle?.let { v ->
-            if (v.knownIssueIds.isNotEmpty()) {
-                item {
-                    VehicleHealthCard(
-                        vehicle    = v,
-                        tcvMonitor = tcvMon,
-                        activeDtcChecker = viewModel::isDtcActive,
-                        onToggleTcv = viewModel::toggleTcvMonitor,
-                    )
-                }
-            }
         }
 
         // ── Card 1: Diagnostics ────────────────────────────────────────────
@@ -251,6 +242,22 @@ fun ServiceScreen(
             RecommendationsCard()
         }
 
+        // ── Vehicle Health (Known Issues) — bottom of screen ──────────────
+        vehicle?.let { v ->
+            if (v.knownIssueIds.isNotEmpty()) {
+                item {
+                    VehicleHealthCard(
+                        vehicle          = v,
+                        tcvMonitor       = tcvMon,
+                        activeDtcChecker = viewModel::isDtcActive,
+                        onToggleTcv      = viewModel::toggleTcvMonitor,
+                        isConnected      = isConnected,
+                        onCheckLiveStatus = viewModel::scanDtcs,
+                    )
+                }
+            }
+        }
+
         item { Spacer(Modifier.height(8.dp)) }
     }
 }
@@ -263,13 +270,48 @@ private fun VehicleHealthCard(
     tcvMonitor: TcvMonitorState,
     activeDtcChecker: (String) -> Boolean,
     onToggleTcv: () -> Unit,
+    isConnected: Boolean,
+    onCheckLiveStatus: () -> Unit,
 ) {
-    ServiceCard(title = "Vehicle Health", icon = Icons.Filled.Warning, iconTint = DarkWarning) {
-        Text(
-            "${vehicle.year} Subaru ${vehicle.modelName} · ${vehicle.generation}",
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurface.copy(0.55f),
-        )
+    ServiceCard(title = "Known Issues for This Vehicle", icon = Icons.Filled.Warning, iconTint = DarkWarning) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "${vehicle.year} Subaru ${vehicle.modelName}",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurface.copy(0.55f),
+                )
+                if (vehicle.generationBadge.isNotEmpty()) {
+                    Surface(
+                        color = DarkPrimary.copy(0.12f),
+                        shape = RoundedCornerShape(4.dp),
+                        modifier = Modifier.padding(top = 3.dp),
+                    ) {
+                        Text(
+                            vehicle.generationBadge + " Generation",
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = DarkPrimary,
+                            fontWeight = FontWeight.Bold,
+                        )
+                    }
+                }
+            }
+            Button(
+                onClick = onCheckLiveStatus,
+                enabled = isConnected,
+                colors = ButtonDefaults.buttonColors(containerColor = DarkPrimary),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                modifier = Modifier.height(34.dp),
+            ) {
+                Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(4.dp))
+                Text("Check Live Status", style = MaterialTheme.typography.labelSmall)
+            }
+        }
         Spacer(Modifier.height(10.dp))
 
         vehicle.knownIssueIds.forEachIndexed { idx, issueId ->
@@ -1214,63 +1256,34 @@ private fun CvtRelearnStepDialog(step: Int, onConfirm: () -> Unit, onCancel: () 
 
 // ── Recommendations ───────────────────────────────────────────────────────────
 
-private data class Recommendation(val title: com.subaru.servicetool.data.model.LocalizedText, val body: com.subaru.servicetool.data.model.LocalizedText)
-
-private val RECOMMENDATIONS: List<Recommendation> = listOf(
-    Recommendation(
-        title = com.subaru.servicetool.data.model.LocalizedText(en = "Change CVT Fluid Every 40,000 km", ka = "CVT-ის სითხის შეცვლა ყოველ 40,000 კმ-ზე"),
-        body  = com.subaru.servicetool.data.model.LocalizedText(en = "Subaru recommends CVT fluid every 40,000 km for severe duty. Despite the 'lifetime fluid' label, degraded fluid causes solenoid wear, slip, and overheating. Use only Subaru-approved Lineartronic CVT fluid (Part: SOA427V1410).", ka = "Subaru გირჩევთ CVT-ის სითხის შეცვლას ყოველ 40,000 კმ-ზე მძიმე სამუშაო პირობებისთვის. ინარჩუნებდე Subaru-ს დამტკიცებული Lineartronic CVT სითხე."),
-    ),
-    Recommendation(
-        title = com.subaru.servicetool.data.model.LocalizedText(en = "Check and Reset TPMS After Tire Swap", ka = "TPMS-ის შემოწმება და გადაყენება საბურავის შეცვლის შემდეგ"),
-        body  = com.subaru.servicetool.data.model.LocalizedText(en = "After rotating or replacing tires, recalibrate the TPMS system: park the car, start the engine, then hold the TPMS button under the steering wheel until the light blinks twice. Drive over 50 km/h for 10 minutes to complete calibration.", ka = "საბურავის როტაციის ან შეცვლის შემდეგ, გადაყენეთ TPMS სისტემა: გააჩერეთ მანქანა, ჩართეთ ძრავა, შემდეგ დაიჭირეთ TPMS ღილაკი საჭის ქვეშ, სანამ შუქი ორჯერ ციმციმებს."),
-    ),
-    Recommendation(
-        title = com.subaru.servicetool.data.model.LocalizedText(en = "EyeSight Camera Windshield Cleaning", ka = "EyeSight კამერის მინდვრის გაწმენდა"),
-        body  = com.subaru.servicetool.data.model.LocalizedText(en = "The EyeSight stereo cameras sit behind the rearview mirror. Keep the windshield clean in that area — use a microfiber cloth and glass cleaner, never ammonia-based products. Contamination causes false alerts and disables the system.", ka = "EyeSight სტერეო კამერები მდებარეობს უკანა სარკის უკან. შეინარჩუნეთ მინდვრი სუფთა — გამოიყენეთ მიკროფიბრის ქსოვილი, არ გამოიყენოთ ამიაკის შემცველი პროდუქტები."),
-    ),
-    Recommendation(
-        title = com.subaru.servicetool.data.model.LocalizedText(en = "AWD System: Check Tire Circumference Match", ka = "AWD სისტემა: საბურავის გარშემოწერილობის შესაბამისობის შემოწმება"),
-        body  = com.subaru.servicetool.data.model.LocalizedText(en = "Subaru's symmetrical AWD is sensitive to mismatched tire sizes. Tires must be within 1/16 inch (1.6 mm) circumference of each other across all four. Replacing only one or two tires can damage the AWD center coupling and is not covered by warranty.", ka = "Subaru-ს სიმეტრიული AWD მგრძნობიარეა საბურავის ზომის შეუთავსებლობის მიმართ. ყველა ოთხი საბურავი უნდა იყოს 1.6 მმ-ის ფარგლებში ერთმანეთთან."),
-    ),
-    Recommendation(
-        title = com.subaru.servicetool.data.model.LocalizedText(en = "Spark Plugs: Use Iridium, Not Copper", ka = "სანთლები: გამოიყენეთ ირიდიუმი, არ სპილენძი"),
-        body  = com.subaru.servicetool.data.model.LocalizedText(en = "Subaru FA/FB engines require iridium spark plugs. Copper plugs may cause misfires and ECU relearn issues. OEM spec: NGK ILKAR7L11 (FA20/FB20) or DILFR6J11 (FA24). Change every 60,000 km or earlier if rough idle appears.", ka = "Subaru FA/FB ძრავები საჭიროებს ირიდიუმის სანთლებს. OEM სპეციფ.: NGK ILKAR7L11 (FA20/FB20) ან DILFR6J11 (FA24). შეცვალეთ ყოველ 60,000 კმ-ზე."),
-    ),
-    Recommendation(
-        title = com.subaru.servicetool.data.model.LocalizedText(en = "Coolant: Use Subaru Super Coolant (Blue)", ka = "გამაგრილებელი: გამოიყენეთ Subaru Super Coolant (ლურჯი)"),
-        body  = com.subaru.servicetool.data.model.LocalizedText(en = "Subaru requires its own Super Coolant (blue). Standard green antifreeze is not compatible and may damage aluminum engine components over time. Change interval: 135,000 km or 11 years, whichever comes first. Part: SOA868V9210.", ka = "Subaru საჭიროებს საკუთარ Super Coolant-ს (ლურჯი). სტანდარტული მწვანე ანტიფრიზი არ არის თავსებადი. შეცვლის ინტერვალი: 135,000 კმ ან 11 წელი."),
-    ),
-    Recommendation(
-        title = com.subaru.servicetool.data.model.LocalizedText(en = "Throttle Body Cleaning Every 60,000 km", ka = "სამხრეთის ნაწილის გაწმენდა ყოველ 60,000 კმ-ზე"),
-        body  = com.subaru.servicetool.data.model.LocalizedText(en = "Carbon buildup on the throttle plate causes rough idle and throttle response issues. Clean with a throttle body cleaner and a soft cloth. After cleaning, always perform a Throttle Body Relearn procedure (available in this app) to reset the position baseline.", ka = "ნახშირბადის დაგროვება სამხრეთის ფირფიტაზე იწვევს ნეიტრალური სვლის პრობლემებს. გაწმენდის შემდეგ, ჩაუტარეთ Throttle Body Relearn პროცედურა ამ აპლიკაციაში."),
-    ),
-    Recommendation(
-        title = com.subaru.servicetool.data.model.LocalizedText(en = "Transmission Oil Pan Magnet Check", ka = "გადამცემის ზეთის ვარდსაკიდის მაგნიტის შემოწმება"),
-        body  = com.subaru.servicetool.data.model.LocalizedText(en = "When draining CVT fluid, always inspect the drain plug magnet. A thin metallic film is normal (fine particles). Metallic chunks or shavings indicate internal wear — do not refill until you diagnose the source. This can save a CVT replacement.", ka = "CVT-ის სითხის ამოსხმისას, ყოველთვის შეამოწმეთ სარქვლის მაგნიტი. თხელი ლითონის ფენა ნორმალურია. ლითონის ნაჭრები მიუთითებს შიდა ცვეთაზე."),
-    ),
-    Recommendation(
-        title = com.subaru.servicetool.data.model.LocalizedText(en = "Oil Change: Use 0W-20 Full Synthetic Only", ka = "ზეთის შეცვლა: გამოიყენეთ 0W-20 სრულ სინთეტიკა"),
-        body  = com.subaru.servicetool.data.model.LocalizedText(en = "All FB/FA series engines require 0W-20 full synthetic oil. Using heavier viscosity oil (5W-30, 5W-40) increases oil pressure and can mask leaks. It also reduces fuel economy. Change every 6,000–8,000 km on Subaru's FB-series engines.", ka = "ყველა FB/FA სერიის ძრავა საჭიროებს 0W-20 სრულ სინთეტიკური ზეთს. შეცვალეთ ყოველ 6,000–8,000 კმ-ზე."),
-    ),
-    Recommendation(
-        title = com.subaru.servicetool.data.model.LocalizedText(en = "Brake Fluid: Change Every 2 Years", ka = "სამუხრუჭე სითხე: შეცვლა ყოველ 2 წელიწადში"),
-        body  = com.subaru.servicetool.data.model.LocalizedText(en = "Brake fluid is hygroscopic — it absorbs moisture over time, lowering its boiling point. Subaru recommends DOT 3 or DOT 4 fluid replacement every 2 years regardless of mileage. Degraded fluid can cause vapor lock and brake fade during hard stops.", ka = "სამუხრუჭე სითხე შთანთქავს ტენს და შეამცირებს დუღილის წერტილს. Subaru გირჩევს DOT 3 ან DOT 4 სითხის შეცვლას ყოველ 2 წელიწადში, მაშინაც კი, თუ გარბენი მცირეა."),
-    ),
+private val TIP_RES_IDS: List<Pair<Int, Int>> = listOf(
+    R.string.tip_1_title to R.string.tip_1_body,
+    R.string.tip_2_title to R.string.tip_2_body,
+    R.string.tip_3_title to R.string.tip_3_body,
+    R.string.tip_4_title to R.string.tip_4_body,
+    R.string.tip_5_title to R.string.tip_5_body,
+    R.string.tip_6_title to R.string.tip_6_body,
+    R.string.tip_7_title to R.string.tip_7_body,
+    R.string.tip_8_title to R.string.tip_8_body,
+    R.string.tip_9_title to R.string.tip_9_body,
+    R.string.tip_10_title to R.string.tip_10_body,
 )
 
 @Composable
 private fun RecommendationsCard() {
-    ServiceCard(title = "Maintenance Tips", icon = Icons.Filled.Info, iconTint = DarkPrimary) {
+    ServiceCard(title = stringResource(R.string.recommendations_title), icon = Icons.Filled.Info, iconTint = DarkPrimary) {
         Text(
             "Subaru-specific maintenance advice",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurface.copy(0.55f),
         )
         Spacer(Modifier.height(10.dp))
-        RECOMMENDATIONS.forEachIndexed { idx, rec ->
-            RecommendationRow(rec)
-            if (idx < RECOMMENDATIONS.lastIndex) {
+        TIP_RES_IDS.forEachIndexed { idx, (titleRes, bodyRes) ->
+            RecommendationRow(
+                title = stringResource(titleRes),
+                body  = stringResource(bodyRes),
+            )
+            if (idx < TIP_RES_IDS.lastIndex) {
                 HorizontalDivider(
                     modifier = Modifier.padding(vertical = 6.dp),
                     color = MaterialTheme.colorScheme.outline.copy(0.1f),
@@ -1281,7 +1294,7 @@ private fun RecommendationsCard() {
 }
 
 @Composable
-private fun RecommendationRow(rec: Recommendation) {
+private fun RecommendationRow(title: String, body: String) {
     var expanded by remember { mutableStateOf(false) }
 
     Column {
@@ -1290,7 +1303,7 @@ private fun RecommendationRow(rec: Recommendation) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                rec.title.forLocale(),
+                title,
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.weight(1f),
@@ -1310,7 +1323,7 @@ private fun RecommendationRow(rec: Recommendation) {
             exit  = shrinkVertically() + fadeOut(),
         ) {
             Text(
-                rec.body.forLocale(),
+                body,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurface.copy(0.7f),
                 modifier = Modifier.padding(top = 6.dp, bottom = 4.dp),

@@ -183,24 +183,14 @@
     <string name="recommendations_title">Wartungshinweise</string>
 
     <!-- Maintenance tips -->
-    <string name="tip_1_title">CVT-Öl alle 40.000 km wechseln</string>
-    <string name="tip_1_body">Subaru empfiehlt einen CVT-Ölwechsel alle 40.000 km bei intensiver Nutzung. Trotz der Bezeichnung „Lifetime-Öl" verursacht degradiertes Öl Magnetventilverschleiß, Schlupf und Überhitzung. Verwenden Sie ausschließlich das von Subaru zugelassene Lineartronic CVT-Öl (Teilenr.: SOA427V1410).</string>
-    <string name="tip_2_title">TPMS nach Reifenwechsel prüfen und zurücksetzen</string>
-    <string name="tip_2_body">Nach dem Drehen oder Wechseln der Reifen das TPMS-System neu kalibrieren: Auto parken, Motor starten, dann den TPMS-Knopf unter dem Lenkrad gedrückt halten, bis das Licht zweimal blinkt. Mindestens 10 Minuten über 50 km/h fahren, um die Kalibrierung abzuschließen.</string>
-    <string name="tip_3_title">EyeSight-Kamera: Windschutzscheibe reinigen</string>
-    <string name="tip_3_body">Die EyeSight-Stereokameras befinden sich hinter dem Rückspiegel. Den Windschutzscheibenbereich sauber halten — Mikrofasertuch und Glasreiniger verwenden, niemals ammoniakhaltige Produkte. Verschmutzung löst Fehlalarme aus und deaktiviert das System.</string>
-    <string name="tip_4_title">AWD-System: Übereinstimmung des Reifenumfangs prüfen</string>
-    <string name="tip_4_body">Subarus symmetrisches AWD-System reagiert empfindlich auf unterschiedliche Reifengrößen. Alle vier Reifen müssen innerhalb von 1,6 mm Umfang voneinander liegen. Das Ersetzen von nur einem oder zwei Reifen kann die AWD-Zentralkupplung beschädigen und ist nicht durch die Garantie abgedeckt.</string>
-    <string name="tip_5_title">Zündkerzen: Iridium verwenden, nicht Kupfer</string>
-    <string name="tip_5_body">Subaru FA/FB-Motoren benötigen Iridium-Zündkerzen. Kupferkerzen können zu Fehlzündungen und ECU-Nachlernproblemen führen. OEM-Spezifikation: NGK ILKAR7L11 (FA20/FB20) oder DILFR6J11 (FA24). Alle 60.000 km oder früher bei Laufrauigkeit im Leerlauf wechseln.</string>
-    <string name="tip_6_title">Kühlmittel: Subaru Super Coolant (Blau) verwenden</string>
-    <string name="tip_6_body">Subaru benötigt seinen eigenen Super Coolant (blau). Standard-Grünantifrosta ist nicht kompatibel und kann Aluminiumkomponenten des Motors im Laufe der Zeit beschädigen. Wechselintervall: 135.000 km oder 11 Jahre, je nachdem, was zuerst eintritt. Teilenr.: SOA868V9210.</string>
-    <string name="tip_7_title">Drosselklappenreinigung alle 60.000 km</string>
-    <string name="tip_7_body">Koksrückstände an der Drosselklappe verursachen unruhigen Leerlauf und Ansprechprobleme. Mit Drosselklappenreiniger und weichem Tuch säubern. Nach der Reinigung immer die Throttle Body Relearn-Prozedur durchführen (in dieser App verfügbar), um die Ausgangsposition zurückzusetzen.</string>
-    <string name="tip_8_title">Magnet am Getriebeölwannenablass prüfen</string>
-    <string name="tip_8_body">Beim Ablassen des CVT-Öls immer den Magneten am Ablassstopfen prüfen. Ein dünner Metallfilm ist normal (Feinpartikel). Metallbrocken oder Späne deuten auf internen Verschleiß hin — nicht nachfüllen, bevor die Ursache diagnostiziert wurde. So kann ein CVT-Austausch vermieden werden.</string>
-    <string name="tip_9_title">Ölwechsel: Nur vollsynthetisches 0W-20 verwenden</string>
-    <string name="tip_9_body">Alle Motoren der FB/FA-Serie benötigen vollsynthetisches 0W-20-Öl. Die Verwendung von Öl mit höherer Viskosität (5W-30, 5W-40) erhöht den Öldruck und kann Lecks verbergen. Es reduziert auch den Kraftstoffverbrauch. Alle 6.000–8.000 km bei Subaru FB-Motoren wechseln.</string>
-    <string name="tip_10_title">Bremsflüssigkeit: alle 2 Jahre wechseln</string>
-    <string name="tip_10_body">Bremsflüssigkeit ist hygroskopisch — sie nimmt im Laufe der Zeit Feuchtigkeit auf und senkt den Siedepunkt. Subaru empfiehlt den Austausch von DOT 3 oder DOT 4 Flüssigkeit alle 2 Jahre unabhängig vom Kilometerstand. Degradierte Flüssigkeit kann Dampfblasen und Bremsversagen bei starken Bremsungen verursachen.</string>
+    <string name="tip_1">Wechseln Sie das Motoröl alle 5.000–8.000 km je nach Stadt- oder Autobahnfahrten. Verwenden Sie nur hochwertige Öle von renommierten Herstellern. Verwenden Sie nur einen hochwertigen Ölfilter mit Doppelventil.</string>
+    <string name="tip_2">Wechseln Sie das CVT-Getriebeöl alle 50.000 km. Verwenden Sie nur Öl, das ausdrücklich die Subaru-CVT-Freigabe auf dem Etikett trägt. Entfernen Sie die Getriebewanne und ersetzen oder reinigen Sie den Metallfilter. Ein kompletter Wechsel benötigt 10–12 Liter Öl. Wechseln Sie auch das Schaltgetriebeöl alle 50.000 km.</string>
+    <string name="tip_3">Wechseln Sie das Öl im vorderen und hinteren Differenzial alle 50.000 km. Verwenden Sie eine beliebige gute Marke mit 75W90-Freigabe.</string>
+    <string name="tip_4">Ersetzen Sie das Werkskühlmittel bei 150.000 km, dann alle 100.000 km. Verwenden Sie stets Subaru-zugelassenes P-OAT-Kühlmittel ohne Silikate. Verwenden Sie kein normales blaues oder grünes Frostschutzmittel, billiges oder universelles Frostschutzmittel. Ein vollständiger Wechsel benötigt 8–10 Liter.</string>
+    <string name="tip_5">Wechseln Sie die Bremsflüssigkeit alle 100.000 km.</string>
+    <string name="tip_6">Wechseln Sie die Zündkerzen alle 100.000 km. Installieren Sie nur OEM-Kerzen gemäß Katalog.</string>
+    <string name="tip_7">Ersetzen Sie den Luftfilter alle 15.000–20.000 km sowie den Innenraumfilter (Klimaanlage).</string>
+    <string name="tip_8">Rotieren Sie die Reifen alle 20.000 km: die hinteren nach vorne und die vorderen nach hinten. Dies gewährleistet gleichmäßigen Verschleiß.</string>
+    <string name="tip_9">Vermeiden Sie hohe Drehzahlen, bis die Öltemperatur 75°C oder mehr erreicht hat. Denken Sie daran: Wenn das Kühlmittel Betriebstemperatur erreicht, haben Motoröl und Getriebeöl ihre Betriebstemperatur noch nicht erreicht.</string>
+    <string name="tip_10">Bei starker Belastung (Gelände oder Rennstrecke) — überwachen Sie die Öltemperaturen, um Überhitzung und versehentliche Schäden zu vermeiden!</string>
 </resources>

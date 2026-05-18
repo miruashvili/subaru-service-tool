@@ -89,6 +89,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -1256,17 +1257,17 @@ private fun CvtRelearnStepDialog(step: Int, onConfirm: () -> Unit, onCancel: () 
 
 // ── Recommendations ───────────────────────────────────────────────────────────
 
-private val TIP_RES_IDS: List<Pair<Int, Int>> = listOf(
-    R.string.tip_1_title to R.string.tip_1_body,
-    R.string.tip_2_title to R.string.tip_2_body,
-    R.string.tip_3_title to R.string.tip_3_body,
-    R.string.tip_4_title to R.string.tip_4_body,
-    R.string.tip_5_title to R.string.tip_5_body,
-    R.string.tip_6_title to R.string.tip_6_body,
-    R.string.tip_7_title to R.string.tip_7_body,
-    R.string.tip_8_title to R.string.tip_8_body,
-    R.string.tip_9_title to R.string.tip_9_body,
-    R.string.tip_10_title to R.string.tip_10_body,
+private val TIP_RES_IDS: List<Int> = listOf(
+    R.string.tip_1,
+    R.string.tip_2,
+    R.string.tip_3,
+    R.string.tip_4,
+    R.string.tip_5,
+    R.string.tip_6,
+    R.string.tip_7,
+    R.string.tip_8,
+    R.string.tip_9,
+    R.string.tip_10,
 )
 
 @Composable
@@ -1278,11 +1279,8 @@ private fun RecommendationsCard() {
             color = MaterialTheme.colorScheme.onSurface.copy(0.55f),
         )
         Spacer(Modifier.height(10.dp))
-        TIP_RES_IDS.forEachIndexed { idx, (titleRes, bodyRes) ->
-            RecommendationRow(
-                title = stringResource(titleRes),
-                body  = stringResource(bodyRes),
-            )
+        TIP_RES_IDS.forEachIndexed { idx, textRes ->
+            RecommendationRow(text = stringResource(textRes))
             if (idx < TIP_RES_IDS.lastIndex) {
                 HorizontalDivider(
                     modifier = Modifier.padding(vertical = 6.dp),
@@ -1294,39 +1292,27 @@ private fun RecommendationsCard() {
 }
 
 @Composable
-private fun RecommendationRow(title: String, body: String) {
+private fun RecommendationRow(text: String) {
     var expanded by remember { mutableStateOf(false) }
 
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                title,
-                style = MaterialTheme.typography.bodySmall,
-                fontWeight = FontWeight.Medium,
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(28.dp)) {
-                Icon(
-                    if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurface.copy(0.5f),
-                    modifier = Modifier.size(16.dp),
-                )
-            }
-        }
-        AnimatedVisibility(
-            visible = expanded,
-            enter = expandVertically() + fadeIn(),
-            exit  = shrinkVertically() + fadeOut(),
-        ) {
-            Text(
-                body,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(0.7f),
-                modifier = Modifier.padding(top = 6.dp, bottom = 4.dp),
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            text,
+            style = MaterialTheme.typography.bodySmall,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f),
+            maxLines = if (expanded) Int.MAX_VALUE else 3,
+            overflow = TextOverflow.Ellipsis,
+        )
+        IconButton(onClick = { expanded = !expanded }, modifier = Modifier.size(28.dp)) {
+            Icon(
+                if (expanded) Icons.Filled.ExpandLess else Icons.Filled.ExpandMore,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface.copy(0.5f),
+                modifier = Modifier.size(16.dp),
             )
         }
     }

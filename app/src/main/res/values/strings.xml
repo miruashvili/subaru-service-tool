@@ -214,24 +214,14 @@
     <string name="recommendations_title">Maintenance Tips</string>
 
     <!-- Maintenance tips -->
-    <string name="tip_1_title">Change CVT Fluid Every 40,000 km</string>
-    <string name="tip_1_body">Subaru recommends CVT fluid every 40,000 km for severe duty. Despite the \'lifetime fluid\' label, degraded fluid causes solenoid wear, slip, and overheating. Use only Subaru-approved Lineartronic CVT fluid (Part: SOA427V1410).</string>
-    <string name="tip_2_title">Check and Reset TPMS After Tire Swap</string>
-    <string name="tip_2_body">After rotating or replacing tires, recalibrate the TPMS system: park the car, start the engine, then hold the TPMS button under the steering wheel until the light blinks twice. Drive over 50 km/h for 10 minutes to complete calibration.</string>
-    <string name="tip_3_title">EyeSight Camera Windshield Cleaning</string>
-    <string name="tip_3_body">The EyeSight stereo cameras sit behind the rearview mirror. Keep the windshield clean in that area — use a microfiber cloth and glass cleaner, never ammonia-based products. Contamination causes false alerts and disables the system.</string>
-    <string name="tip_4_title">AWD System: Check Tire Circumference Match</string>
-    <string name="tip_4_body">Subaru\'s symmetrical AWD is sensitive to mismatched tire sizes. Tires must be within 1/16 inch (1.6 mm) circumference of each other across all four. Replacing only one or two tires can damage the AWD center coupling and is not covered by warranty.</string>
-    <string name="tip_5_title">Spark Plugs: Use Iridium, Not Copper</string>
-    <string name="tip_5_body">Subaru FA/FB engines require iridium spark plugs. Copper plugs may cause misfires and ECU relearn issues. OEM spec: NGK ILKAR7L11 (FA20/FB20) or DILFR6J11 (FA24). Change every 60,000 km or earlier if rough idle appears.</string>
-    <string name="tip_6_title">Coolant: Use Subaru Super Coolant (Blue)</string>
-    <string name="tip_6_body">Subaru requires its own Super Coolant (blue). Standard green antifreeze is not compatible and may damage aluminum engine components over time. Change interval: 135,000 km or 11 years, whichever comes first. Part: SOA868V9210.</string>
-    <string name="tip_7_title">Throttle Body Cleaning Every 60,000 km</string>
-    <string name="tip_7_body">Carbon buildup on the throttle plate causes rough idle and throttle response issues. Clean with a throttle body cleaner and a soft cloth. After cleaning, always perform a Throttle Body Relearn procedure (available in this app) to reset the position baseline.</string>
-    <string name="tip_8_title">Transmission Oil Pan Magnet Check</string>
-    <string name="tip_8_body">When draining CVT fluid, always inspect the drain plug magnet. A thin metallic film is normal (fine particles). Metallic chunks or shavings indicate internal wear — do not refill until you diagnose the source. This can save a CVT replacement.</string>
-    <string name="tip_9_title">Oil Change: Use 0W-20 Full Synthetic Only</string>
-    <string name="tip_9_body">All FB/FA series engines require 0W-20 full synthetic oil. Using heavier viscosity oil (5W-30, 5W-40) increases oil pressure and can mask leaks. It also reduces fuel economy. Change every 6,000–8,000 km on Subaru\'s FB-series engines.</string>
-    <string name="tip_10_title">Brake Fluid: Change Every 2 Years</string>
-    <string name="tip_10_body">Brake fluid is hygroscopic — it absorbs moisture over time, lowering its boiling point. Subaru recommends DOT 3 or DOT 4 fluid replacement every 2 years regardless of mileage. Degraded fluid can cause vapor lock and brake fade during hard stops.</string>
+    <string name="tip_1">Change engine oil every 5,000–8,000 km depending on how much you drive in the city or on the highway. Use only high-quality oil from well-known manufacturers. Use only a high-quality dual-valve oil filter.</string>
+    <string name="tip_2">Change CVT transmission fluid every 50,000 km. Use only fluid that explicitly states Subaru CVT approval on the label. Remove the transmission pan and replace or clean the metal filter. A full change requires 10–12 liters of fluid. Also change manual transmission fluid every 50,000 km.</string>
+    <string name="tip_3">Change front and rear differential oil every 50,000 km. Use any good brand of 75W90 rated oil.</string>
+    <string name="tip_4">Replace the factory coolant at 150,000 km, then every 100,000 km after that. Always use Subaru-approved P-OAT coolant without silicates. Do not use plain blue or green antifreeze, cheap antifreeze, or universal antifreeze. One full change requires 8–10 liters.</string>
+    <string name="tip_5">Replace brake fluid every 100,000 km.</string>
+    <string name="tip_6">Replace spark plugs every 100,000 km. Install only OEM plugs according to the catalog.</string>
+    <string name="tip_7">Replace the air filter every 15,000–20,000 km, as well as the cabin (air conditioning) filter.</string>
+    <string name="tip_8">Rotate tires every 20,000 km — move the rear tires to the front and the front tires to the rear. This ensures even wear.</string>
+    <string name="tip_9">Avoid high RPM until the oil temperature reaches 75°C or more. Remember: when the coolant reaches operating temperature, the engine and transmission oil temperatures have still not reached their working temperature.</string>
+    <string name="tip_10">During heavy loads (off-road or track driving) — monitor oil temperatures to avoid overheating and accidental damage!</string>
 </resources>

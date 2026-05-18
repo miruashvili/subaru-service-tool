@@ -183,24 +183,14 @@
     <string name="recommendations_title">Conseils d\'entretien</string>
 
     <!-- Maintenance tips -->
-    <string name="tip_1_title">Changer le fluide CVT tous les 40 000 km</string>
-    <string name="tip_1_body">Subaru recommande de changer le fluide CVT tous les 40 000 km en utilisation intensive. Malgré l\'étiquette \'fluide à vie\', un fluide dégradé provoque l\'usure des solénoïdes, des glissements et une surchauffe. Utilisez uniquement le fluide CVT Lineartronic approuvé par Subaru (Pièce : SOA427V1410).</string>
-    <string name="tip_2_title">Vérifier et réinitialiser le TPMS après un changement de pneu</string>
-    <string name="tip_2_body">Après rotation ou remplacement des pneus, recalibrer le système TPMS : garer la voiture, démarrer le moteur, puis maintenir le bouton TPMS sous le volant jusqu\'à ce que le voyant clignote deux fois. Rouler à plus de 50 km/h pendant 10 minutes pour terminer la calibration.</string>
-    <string name="tip_3_title">Nettoyage du pare-brise de la caméra EyeSight</string>
-    <string name="tip_3_body">Les caméras stéréo EyeSight sont derrière le rétroviseur. Maintenir le pare-brise propre dans cette zone — utiliser un chiffon en microfibre et un nettoyant pour vitres, jamais de produits à base d\'ammoniaque. La contamination provoque de fausses alertes et désactive le système.</string>
-    <string name="tip_4_title">Système AWD : vérifier la concordance de la circonférence des pneus</string>
-    <string name="tip_4_body">La transmission AWD symétrique de Subaru est sensible aux écarts de taille de pneus. Tous les quatre pneus doivent se trouver dans un rayon de 1,6 mm de circonférence les uns par rapport aux autres. Le remplacement d\'un ou deux pneus seulement peut endommager le coupleur central AWD et n\'est pas couvert par la garantie.</string>
-    <string name="tip_5_title">Bougies d\'allumage : utiliser l\'iridium, pas le cuivre</string>
-    <string name="tip_5_body">Les moteurs Subaru FA/FB nécessitent des bougies d\'allumage en iridium. Les bougies en cuivre peuvent provoquer des ratés d\'allumage et des problèmes de réapprentissage de l\'ECU. Spec OEM : NGK ILKAR7L11 (FA20/FB20) ou DILFR6J11 (FA24). Changer tous les 60 000 km ou plus tôt en cas de ralenti irrégulier.</string>
-    <string name="tip_6_title">Liquide de refroidissement : utiliser le Subaru Super Coolant (bleu)</string>
-    <string name="tip_6_body">Subaru exige son propre Super Coolant (bleu). L\'antigel vert standard n\'est pas compatible et peut endommager les composants en aluminium du moteur au fil du temps. Intervalle de remplacement : 135 000 km ou 11 ans, selon la première éventualité. Pièce : SOA868V9210.</string>
-    <string name="tip_7_title">Nettoyage du corps papillon tous les 60 000 km</string>
-    <string name="tip_7_body">L\'accumulation de carbone sur le papillon des gaz provoque un ralenti irrégulier et des problèmes de réponse de l\'accélérateur. Nettoyer avec un nettoyant pour corps de papillon et un chiffon doux. Après le nettoyage, toujours effectuer la procédure Throttle Body Relearn (disponible dans cette app) pour réinitialiser la position de base.</string>
-    <string name="tip_8_title">Vérification de l\'aimant du carter de transmission</string>
-    <string name="tip_8_body">Lors de la vidange du fluide CVT, toujours inspecter l\'aimant du bouchon de vidange. Un mince film métallique est normal (fines particules). Des morceaux ou copeaux métalliques indiquent une usure interne — ne pas remettre de fluide avant de diagnostiquer la source. Cela peut éviter le remplacement du CVT.</string>
-    <string name="tip_9_title">Vidange : utiliser uniquement de l\'huile synthétique 0W-20</string>
-    <string name="tip_9_body">Tous les moteurs de la série FB/FA nécessitent de l\'huile entièrement synthétique 0W-20. L\'utilisation d\'une huile plus visqueuse (5W-30, 5W-40) augmente la pression d\'huile et peut masquer des fuites. Cela réduit également l\'économie de carburant. Changer tous les 6 000–8 000 km sur les moteurs Subaru de la série FB.</string>
-    <string name="tip_10_title">Liquide de frein : changer tous les 2 ans</string>
-    <string name="tip_10_body">Le liquide de frein est hygroscopique — il absorbe l\'humidité au fil du temps, abaissant son point d\'ébullition. Subaru recommande de remplacer le liquide DOT 3 ou DOT 4 tous les 2 ans quel que soit le kilométrage. Un liquide dégradé peut provoquer une poche de vapeur et un affaiblissement des freins lors de freinages brusques.</string>
+    <string name="tip_1">Changez l\'huile moteur tous les 5 000–8 000 km selon que vous conduisez en ville ou sur route. Utilisez uniquement de l\'huile de haute qualité de fabricants reconnus. Utilisez uniquement un filtre à huile à double clapet de haute qualité.</string>
+    <string name="tip_2">Changez le fluide de la boîte CVT tous les 50 000 km. Utilisez uniquement un fluide indiquant explicitement l\'approbation CVT Subaru sur l\'étiquette. Retirez le carter de la boîte et remplacez ou nettoyez le filtre métallique. Un changement complet nécessite 10–12 litres de fluide. Changez également l\'huile de boîte manuelle tous les 50 000 km.</string>
+    <string name="tip_3">Changez l\'huile des différentiels avant et arrière tous les 50 000 km. Utilisez n\'importe quelle bonne marque d\'huile 75W90.</string>
+    <string name="tip_4">Remplacez le liquide de refroidissement d\'origine à 150 000 km, puis tous les 100 000 km. Utilisez toujours le liquide P-OAT approuvé par Subaru, sans silicates. N\'utilisez pas d\'antigel bleu ou vert ordinaire, bon marché ou universel. Un changement complet nécessite 8–10 litres.</string>
+    <string name="tip_5">Changez le liquide de frein tous les 100 000 km.</string>
+    <string name="tip_6">Remplacez les bougies tous les 100 000 km. N\'installez que des bougies d\'origine selon le catalogue.</string>
+    <string name="tip_7">Remplacez le filtre à air tous les 15 000–20 000 km, ainsi que le filtre d\'habitacle (climatisation).</string>
+    <string name="tip_8">Faites la rotation des pneus tous les 20 000 km : les pneus arrière à l\'avant et les pneus avant à l\'arrière. Cela assure une usure uniforme.</string>
+    <string name="tip_9">Évitez les régimes élevés tant que la température de l\'huile n\'a pas atteint 75°C ou plus. Rappel : lorsque le liquide de refroidissement atteint sa température de fonctionnement, l\'huile moteur et de boîte n\'ont pas encore atteint leur température de travail.</string>
+    <string name="tip_10">Lors de charges importantes (tout-terrain ou circuit), surveillez les températures d\'huile pour éviter la surchauffe et des dommages accidentels !</string>
 </resources>

@@ -74,12 +74,13 @@ class BluetoothSettingsViewModel @Inject constructor(
     }
 
     init {
-        refreshPairedDevices()
+        // Silently ignored if BT permission not yet granted; composable re-calls after permission grant
+        try { refreshPairedDevices() } catch (_: Exception) { }
     }
 
     @SuppressLint("MissingPermission")
     fun refreshPairedDevices() {
-        val bonded = btManager?.adapter?.bondedDevices ?: return
+        val bonded = try { btManager?.adapter?.bondedDevices } catch (_: Exception) { null } ?: return
         _pairedDevices.value = bonded.mapNotNull { device ->
             val name = runCatching { device.name }.getOrNull()?.takeIf { it.isNotBlank() }
                 ?: return@mapNotNull null
@@ -153,7 +154,7 @@ class BluetoothSettingsViewModel @Inject constructor(
         else null
 
     /** Whether the adapter is available and enabled. */
-    fun isBluetoothEnabled(): Boolean = btManager?.adapter?.isEnabled == true
+    fun isBluetoothEnabled(): Boolean = try { btManager?.adapter?.isEnabled == true } catch (_: Exception) { false }
 
     /** Permissions needed at runtime depending on SDK version. */
     fun requiredPermissions(): Array<String> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

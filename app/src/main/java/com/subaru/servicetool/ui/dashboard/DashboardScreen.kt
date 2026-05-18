@@ -1,5 +1,6 @@
 package com.subaru.servicetool.ui.dashboard
 
+import android.content.res.Configuration
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -20,6 +21,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -82,6 +84,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -108,6 +111,8 @@ fun DashboardScreen(
     val connLost    by viewModel.connectionLostVisible.collectAsState()
     val editingSlot by viewModel.editingSlot.collectAsState()
     val gaugeSlots  by viewModel.currentGaugeSlots.collectAsState()
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
     LaunchedEffect(Unit) {
         viewModel.navigateToBluetooth.collect { onNavigateToBluetooth() }
@@ -134,51 +139,71 @@ fun DashboardScreen(
             .fillMaxSize()
             .padding(paddingValues),
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            // ── Top bar ───────────────────────────────────────────────────
-            DashboardTopBar(
-                connectionState = state.connectionState,
-                ambientTemp     = state.ambientTemp,
-                connectedName   = state.connectedDeviceName,
-            )
-
-            // ── Alert banner ──────────────────────────────────────────────
-            AlertBanner(alertLevel, onDismiss = viewModel::dismissAlert)
-
-            // ── Vehicle summary card ──────────────────────────────────────
-            VehicleCard(state)
-
-            // ── OBD connection card ───────────────────────────────────────
-            ObdConnectionCard(
-                state        = state,
-                onConnect    = viewModel::connect,
-                onDisconnect = viewModel::disconnect,
-            )
-
-            // ── 2×2 gauge grid ────────────────────────────────────────────
-            GaugeGrid(
-                metrics   = state.metrics,
-                onEditSlot = viewModel::openGaugeEditor,
-            )
-
-            // ── Fuel consumption card ─────────────────────────────────────
-            if (state.connectionState == ObdConnectionState.CONNECTED) {
-                FuelConsumptionCard(
-                    fuel      = state.fuelConsumption,
-                    onReset   = viewModel::resetFuelAvg,
+        if (isLandscape) {
+            // ── Landscape: no scroll, side-by-side ────────────────────────
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                DashboardTopBar(
+                    connectionState = state.connectionState,
+                    ambientTemp     = state.ambientTemp,
+                    connectedName   = state.connectedDeviceName,
                 )
+                AlertBanner(alertLevel, onDismiss = viewModel::dismissAlert)
+                Row(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    GaugeGrid(
+                        metrics    = state.metrics,
+                        onEditSlot = viewModel::openGaugeEditor,
+                        modifier   = Modifier.weight(1f),
+                    )
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (state.connectionState == ObdConnectionState.CONNECTED) {
+                            FuelConsumptionCard(
+                                fuel    = state.fuelConsumption,
+                                onReset = viewModel::resetFuelAvg,
+                            )
+                        }
+                        DtcRow(dtcCount = state.dtcCount, connected = state.connectionState == ObdConnectionState.CONNECTED)
+                    }
+                }
             }
-
-            // ── DTC row ───────────────────────────────────────────────────
-            DtcRow(dtcCount = state.dtcCount, connected = state.connectionState == ObdConnectionState.CONNECTED)
-
-            Spacer(Modifier.height(8.dp))
+        } else {
+            // ── Portrait: scrollable column ───────────────────────────────
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                DashboardTopBar(
+                    connectionState = state.connectionState,
+                    ambientTemp     = state.ambientTemp,
+                    connectedName   = state.connectedDeviceName,
+                )
+                AlertBanner(alertLevel, onDismiss = viewModel::dismissAlert)
+                GaugeGrid(
+                    metrics    = state.metrics,
+                    onEditSlot = viewModel::openGaugeEditor,
+                )
+                if (state.connectionState == ObdConnectionState.CONNECTED) {
+                    FuelConsumptionCard(
+                        fuel    = state.fuelConsumption,
+                        onReset = viewModel::resetFuelAvg,
+                    )
+                }
+                DtcRow(dtcCount = state.dtcCount, connected = state.connectionState == ObdConnectionState.CONNECTED)
+                Spacer(Modifier.height(8.dp))
+            }
         }
 
         // ── Connection-lost snackbar ──────────────────────────────────────
@@ -469,8 +494,8 @@ private fun ObdConnectionCard(
 // ── 2×2 Gauge grid ────────────────────────────────────────────────────────────
 
 @Composable
-private fun GaugeGrid(metrics: List<LiveMetric>, onEditSlot: (Int) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+private fun GaugeGrid(metrics: List<LiveMetric>, onEditSlot: (Int) -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -512,9 +537,10 @@ private fun MetricCard(metric: LiveMetric, onEdit: () -> Unit, modifier: Modifie
         tonalElevation = 2.dp,
         modifier = modifier.aspectRatio(1f).alpha(flashAlpha),
     ) {
-        Box(contentAlignment = Alignment.Center) {
-            androidx.compose.foundation.Canvas(modifier = Modifier.size(100.dp)) {
-                val stroke = Stroke(width = 5.dp.toPx(), cap = StrokeCap.Round)
+        BoxWithConstraints(contentAlignment = Alignment.Center) {
+            val canvasSize = maxWidth * 0.85f
+            androidx.compose.foundation.Canvas(modifier = Modifier.size(canvasSize)) {
+                val stroke = Stroke(width = 10.dp.toPx(), cap = StrokeCap.Round)
                 val startAngle = 150f
                 val sweepTotal = 240f
                 drawArc(color = arcBg, startAngle = startAngle, sweepAngle = sweepTotal, useCenter = false, style = stroke)
@@ -527,19 +553,19 @@ private fun MetricCard(metric: LiveMetric, onEdit: () -> Unit, modifier: Modifie
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier.padding(8.dp),
             ) {
-                Icon(imageVector = metricIcon(metric.iconRes), contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
-                Spacer(Modifier.height(4.dp))
+                Icon(imageVector = metricIcon(metric.iconRes), contentDescription = null, tint = accentColor, modifier = Modifier.size(28.dp))
+                Spacer(Modifier.height(2.dp))
                 AnimatedContent(
                     targetState = metric.value,
                     transitionSpec = { fadeIn(tween(100)) togetherWith fadeOut(tween(100)) },
                     label = metric.id,
                 ) { v ->
                     Text(text = v,
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = if (v.length > 4) 13.sp else 18.sp),
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 36.sp),
                         color = accentColor, textAlign = TextAlign.Center)
                 }
-                Text(metric.unit, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
-                Text(metric.label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
+                Text(metric.unit, style = MaterialTheme.typography.labelSmall.copy(fontSize = 14.sp), color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
+                Text(metric.label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 13.sp),
                     color = MaterialTheme.colorScheme.onSurface.copy(0.4f), textAlign = TextAlign.Center, maxLines = 1)
             }
 

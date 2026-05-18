@@ -1,5 +1,7 @@
 package com.subaru.servicetool.data.obd
 
+import android.util.Log
+
 /**
  * Parses ELM327 / OBD-II adapter responses.
  *
@@ -37,13 +39,14 @@ object ObdParser {
     fun parseVoltage(response: String): Float? =
         "(\\d{1,2}\\.\\d{1,2})".toRegex().find(response)?.value?.toFloatOrNull()
 
-    private val DTC_PATTERN = Regex("^[PCBU][0-9]{4}$")
+    private val DTC_PATTERN = Regex("^[PCBU][0-9A-F]{4}$")
 
     /**
      * Parses stored DTC codes from a Mode 03 response into P/C/B/U strings (e.g. "P0971").
      * Returns an empty list if no DTCs or on parse error.
      */
     fun parseDtcCodes(response: String): List<String> {
+        Log.d("ObdParser", "Raw DTC response: $response")
         val tokens = tokenize(response) ?: return emptyList()
         if (tokens.size < 3) return emptyList()
         val idx = tokens.indexOfFirst { it == "43" }
@@ -58,10 +61,11 @@ object ObdParser {
             if (hi != 0 || lo != 0) {
                 val type = when ((hi shr 6) and 0x3) { 0 -> "P"; 1 -> "C"; 2 -> "B"; else -> "U" }
                 val d1 = (hi shr 4) and 0x3
-                val d2 = hi and 0xF
-                val d3 = (lo shr 4) and 0xF
-                val d4 = lo and 0xF
+                val d2 = (hi and 0xF).toString(16).uppercase()
+                val d3 = (lo shr 4).toString(16).uppercase()
+                val d4 = (lo and 0xF).toString(16).uppercase()
                 val code = "$type$d1$d2$d3$d4"
+                Log.d("ObdParser", "DTC candidate: hi=0x${hi.toString(16)} lo=0x${lo.toString(16)} code=$code")
                 if (DTC_PATTERN.matches(code)) codes.add(code)
             }
             i += 2
@@ -87,9 +91,9 @@ object ObdParser {
             if (hi != 0 || lo != 0) {
                 val type = when ((hi shr 6) and 0x3) { 0 -> "P"; 1 -> "C"; 2 -> "B"; else -> "U" }
                 val d1 = (hi shr 4) and 0x3
-                val d2 = hi and 0xF
-                val d3 = (lo shr 4) and 0xF
-                val d4 = lo and 0xF
+                val d2 = (hi and 0xF).toString(16).uppercase()
+                val d3 = (lo shr 4).toString(16).uppercase()
+                val d4 = (lo and 0xF).toString(16).uppercase()
                 val code = "$type$d1$d2$d3$d4"
                 if (DTC_PATTERN.matches(code)) count++
             }

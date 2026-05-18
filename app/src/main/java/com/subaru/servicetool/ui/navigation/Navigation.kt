@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.automirrored.filled.List
@@ -29,6 +30,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -162,12 +164,12 @@ private fun AppNavigationRail(
     navBackStack: androidx.navigation.NavBackStackEntry?,
     onNavigate: (Screen) -> Unit,
 ) {
-    NavigationRail {
+    NavigationRail(modifier = Modifier.width(72.dp)) {
         val currentDest = navBackStack?.destination
         bottomNavItems.forEach { screen ->
             NavigationRailItem(
                 icon     = { Icon(screen.icon, contentDescription = stringResource(screen.labelRes)) },
-                label    = { Text(stringResource(screen.labelRes)) },
+                label    = null,
                 selected = currentDest?.hierarchy?.any { it.route == screen.route } == true,
                 onClick  = { onNavigate(screen) },
             )

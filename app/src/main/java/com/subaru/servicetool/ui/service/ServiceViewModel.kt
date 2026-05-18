@@ -17,6 +17,7 @@ import com.subaru.servicetool.data.service.ServiceEvent
 import com.subaru.servicetool.data.service.ServiceEventType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -67,6 +68,15 @@ data class CvtConditions(
     val allPassed get() = engineWarm && stationary && idling && inPark && accessoriesOff
 }
 
+// ── TCV diagnostic check ──────────────────────────────────────────────────────
+
+sealed interface TcvCheckState {
+    data object Idle : TcvCheckState
+    data class Scanning(val progress: Float) : TcvCheckState
+    data class FaultFound(val codes: List<String>) : TcvCheckState
+    data object Ok : TcvCheckState
+}
+
 // ── TCV monitor ───────────────────────────────────────────────────────────────
 
 data class CoolantSample(val timestampMs: Long, val tempC: Float)
@@ -109,6 +119,9 @@ class ServiceViewModel @Inject constructor(
 
     private val _tcvMonitor = MutableStateFlow(TcvMonitorState())
     val tcvMonitor: StateFlow<TcvMonitorState> = _tcvMonitor.asStateFlow()
+
+    private val _tcvCheckState = MutableStateFlow<TcvCheckState>(TcvCheckState.Idle)
+    val tcvCheckState: StateFlow<TcvCheckState> = _tcvCheckState.asStateFlow()
 
     private val _showClearConfirm = MutableStateFlow(false)
     val showClearConfirm: StateFlow<Boolean> = _showClearConfirm.asStateFlow()
@@ -378,6 +391,28 @@ class ServiceViewModel @Inject constructor(
     fun removeServiceEvent(id: String) {
         viewModelScope.launch { userPreferences.removeServiceEvent(id) }
     }
+
+    // ── TCV Diagnostic Check ──────────────────────────────────────────────────
+
+    fun startTcvCheck() {
+        if (!isConnected()) return
+        viewModelScope.launch {
+            _tcvCheckState.value = TcvCheckState.Scanning(0f)
+            val obdDeferred = async { btManager.sendCommand("03") }
+            val start = System.currentTimeMillis()
+            while (System.currentTimeMillis() - start < 8_000L) {
+                val p = ((System.currentTimeMillis() - start) / 8_000f).coerceAtMost(0.99f)
+                _tcvCheckState.value = TcvCheckState.Scanning(p)
+                delay(50)
+            }
+            _tcvCheckState.value = TcvCheckState.Scanning(1f)
+            val response = obdDeferred.await()
+            val found = if (response != null) ObdParser.parseTcvCodes(response) else emptyList()
+            _tcvCheckState.value = if (found.isNotEmpty()) TcvCheckState.FaultFound(found) else TcvCheckState.Ok
+        }
+    }
+
+    fun resetTcvCheck() { _tcvCheckState.value = TcvCheckState.Idle }
 
     // ── TCV Monitor ───────────────────────────────────────────────────────────
 

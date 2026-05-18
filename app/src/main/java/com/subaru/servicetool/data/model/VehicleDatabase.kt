@@ -29,6 +29,9 @@ object VehicleDatabase {
             knownIssueIds = listOf("CVT_AWD_SOLENOID")))
         addAll(gen(2024..2026, "Impreza", "FB20",  "2.0L DOHC NA", false,
             generation = "Gen 6", cvtType = "TR580"))
+        addAll(gen(2024..2024, "Impreza RS", "FB25", "2.5L DOHC NA", false,
+            generation = "Gen 6", cvtType = "TR580",
+            knownIssueIds = listOf("TCV_THERMOSTAT")))
 
         // ── WRX (GLOBAL) ──────────────────────────────────────────────────
         addAll(gen(2015..2021, "WRX", "FA20DIT", "2.0L DOHC Direct Injection Turbo", true,
@@ -55,6 +58,11 @@ object VehicleDatabase {
             knownIssueIds = listOf("CVT_AWD_SOLENOID")))
         addAll(gen(2024..2026, "Crosstrek", "FB20",  "2.0L DOHC NA", false,
             generation = "Gen 3", cvtType = "TR580"))
+
+        // ── Crosstrek 2.5L (TCV-affected) ────────────────────────────────
+        addAll(gen(2021..2024, "Crosstrek", "FB25", "2.5L DOHC NA", false,
+            generation = "Gen 3", cvtType = "TR580",
+            knownIssueIds = listOf("TCV_THERMOSTAT")))
 
         // ── XV (EU name for Crosstrek) ────────────────────────────────────
         addAll(gen(2013..2017, "XV", "FB20B", "2.0L DOHC NA", false,
@@ -96,9 +104,11 @@ object VehicleDatabase {
             generation = "Gen 5 (BS)", cvtType = "TR690",
             knownIssueIds = listOf("CVT_LOCKUP_SOLENOID")))
         addAll(gen(2020..2024, "Outback", "FB25",  "2.5L DOHC NA", false,
-            generation = "Gen 6 (BT)", cvtType = "TF80SC"))
+            generation = "Gen 6 (BT)", cvtType = "TF80SC",
+            knownIssueIds = listOf("TCV_THERMOSTAT")))
         addAll(gen(2020..2024, "Outback", "FA24F", "2.4L DOHC Turbo (XT)", true,
-            generation = "Gen 6 (BT)", cvtType = "TF80SC"))
+            generation = "Gen 6 (BT)", cvtType = "TF80SC",
+            knownIssueIds = listOf("TCV_THERMOSTAT")))
         addAll(gen(2025..2026, "Outback", "FB25",  "2.5L DOHC NA", false,
             generation = "Gen 7"))
         addAll(gen(2025..2026, "Outback", "FA24F", "2.4L DOHC Turbo (XT)", true,
@@ -118,9 +128,11 @@ object VehicleDatabase {
             generation = "Gen 6 (BS)", cvtType = "TR690",
             knownIssueIds = listOf("CVT_LOCKUP_SOLENOID")))
         addAll(gen(2020..2024, "Legacy", "FB25",  "2.5L DOHC NA", false,
-            generation = "Gen 7 (BT)"))
+            generation = "Gen 7 (BT)",
+            knownIssueIds = listOf("TCV_THERMOSTAT")))
         addAll(gen(2020..2024, "Legacy", "FA24F", "2.4L DOHC Turbo (XT)", true,
-            generation = "Gen 7 (BT)"))
+            generation = "Gen 7 (BT)",
+            knownIssueIds = listOf("TCV_THERMOSTAT")))
 
         // ── BRZ (no 2021) ─────────────────────────────────────────────────
         addAll(gen(2013..2020, "BRZ", "FA20D", "2.0L DOHC NA", false,

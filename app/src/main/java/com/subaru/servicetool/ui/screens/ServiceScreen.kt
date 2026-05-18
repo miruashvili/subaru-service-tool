@@ -95,6 +95,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.subaru.servicetool.data.model.IssueSeverity
 import com.subaru.servicetool.data.model.KnownIssue
+import com.subaru.servicetool.data.model.LocalizedText
 import com.subaru.servicetool.data.model.VehicleSpec
 import com.subaru.servicetool.data.model.forLocale
 import com.subaru.servicetool.data.service.ServiceEvent
@@ -106,6 +107,7 @@ import com.subaru.servicetool.ui.service.DtcResult
 import com.subaru.servicetool.ui.service.DtcScanState
 import com.subaru.servicetool.ui.service.ProcedureState
 import com.subaru.servicetool.ui.service.ServiceViewModel
+import com.subaru.servicetool.ui.service.TcvCheckState
 import com.subaru.servicetool.ui.service.TcvMonitorState
 import com.subaru.servicetool.ui.service.TcvWarning
 import com.subaru.servicetool.ui.theme.DarkError
@@ -124,6 +126,7 @@ fun ServiceScreen(
     val activeProc        by viewModel.activeProcedure.collectAsState()
     val cvtConds          by viewModel.cvtConditions.collectAsState()
     val tcvMon            by viewModel.tcvMonitor.collectAsState()
+    val tcvCheckState     by viewModel.tcvCheckState.collectAsState()
     val connectionState   by viewModel.connectionState.collectAsState()
     val isConnected       = connectionState is BluetoothConnectionState.Connected
     val showConfirm       by viewModel.showClearConfirm.collectAsState()
@@ -248,12 +251,15 @@ fun ServiceScreen(
             if (v.knownIssueIds.isNotEmpty()) {
                 item {
                     VehicleHealthCard(
-                        vehicle          = v,
-                        tcvMonitor       = tcvMon,
-                        activeDtcChecker = viewModel::isDtcActive,
-                        onToggleTcv      = viewModel::toggleTcvMonitor,
-                        isConnected      = isConnected,
+                        vehicle           = v,
+                        tcvMonitor        = tcvMon,
+                        tcvCheckState     = tcvCheckState,
+                        activeDtcChecker  = viewModel::isDtcActive,
+                        onToggleTcv       = viewModel::toggleTcvMonitor,
+                        isConnected       = isConnected,
                         onCheckLiveStatus = viewModel::scanDtcs,
+                        onStartTcvCheck   = viewModel::startTcvCheck,
+                        onResetTcvCheck   = viewModel::resetTcvCheck,
                     )
                 }
             }
@@ -269,10 +275,13 @@ fun ServiceScreen(
 private fun VehicleHealthCard(
     vehicle: VehicleSpec,
     tcvMonitor: TcvMonitorState,
+    tcvCheckState: TcvCheckState,
     activeDtcChecker: (String) -> Boolean,
     onToggleTcv: () -> Unit,
     isConnected: Boolean,
     onCheckLiveStatus: () -> Unit,
+    onStartTcvCheck: () -> Unit,
+    onResetTcvCheck: () -> Unit,
 ) {
     ServiceCard(title = "Known Issues for This Vehicle", icon = Icons.Filled.Warning, iconTint = DarkWarning) {
         Row(
@@ -319,11 +328,15 @@ private fun VehicleHealthCard(
             val issue = com.subaru.servicetool.data.model.KnownIssueRegistry.findById(issueId) ?: return@forEachIndexed
             val anyActive = issue.dtcCodes.any { activeDtcChecker(it) }
             KnownIssueRow(
-                issue = issue,
-                detected = anyActive,
-                showTcvMonitor = issue.requiresTcvMonitor,
-                tcvMonitor = tcvMonitor,
-                onToggleTcv = onToggleTcv,
+                issue           = issue,
+                detected        = anyActive,
+                showTcvMonitor  = issue.requiresTcvMonitor,
+                tcvMonitor      = tcvMonitor,
+                tcvCheckState   = tcvCheckState,
+                onToggleTcv     = onToggleTcv,
+                isConnected     = isConnected,
+                onStartTcvCheck = onStartTcvCheck,
+                onResetTcvCheck = onResetTcvCheck,
             )
             if (idx < vehicle.knownIssueIds.lastIndex) {
                 HorizontalDivider(
@@ -341,7 +354,11 @@ private fun KnownIssueRow(
     detected: Boolean,
     showTcvMonitor: Boolean,
     tcvMonitor: TcvMonitorState,
+    tcvCheckState: TcvCheckState,
     onToggleTcv: () -> Unit,
+    isConnected: Boolean,
+    onStartTcvCheck: () -> Unit,
+    onResetTcvCheck: () -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -400,6 +417,13 @@ private fun KnownIssueRow(
                 InfoSection("Symptoms", issue.symptoms.forLocale())
                 InfoSection("Fix", issue.fix.forLocale())
                 if (showTcvMonitor) {
+                    Spacer(Modifier.height(8.dp))
+                    TcvCheckSection(
+                        state       = tcvCheckState,
+                        isConnected = isConnected,
+                        onStart     = onStartTcvCheck,
+                        onReset     = onResetTcvCheck,
+                    )
                     Spacer(Modifier.height(8.dp))
                     TcvMonitorSection(tcvMonitor, onToggleTcv)
                 }
@@ -485,6 +509,272 @@ private fun TcvMonitorSection(state: TcvMonitorState, onToggle: () -> Unit) {
             }
         }
     }
+}
+
+// ── TCV Check Section ─────────────────────────────────────────────────────────
+
+@Composable
+private fun TcvCheckSection(
+    state: TcvCheckState,
+    isConnected: Boolean,
+    onStart: () -> Unit,
+    onReset: () -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(0.5f),
+        shape = RoundedCornerShape(10.dp),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.Thermostat, contentDescription = null,
+                    tint = when (state) {
+                        is TcvCheckState.FaultFound -> DarkError
+                        is TcvCheckState.Ok         -> DarkSuccess
+                        else                        -> MaterialTheme.colorScheme.primary
+                    },
+                    modifier = Modifier.size(16.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    LocalizedText(
+                        en = "Check Electric Thermostat",
+                        ka = "ელექტრო თერმოსტატის შემოწმება",
+                        ru = "Проверка электронного термостата",
+                        es = "Verificar Termostato Eléctrico",
+                        fr = "Vérifier le Thermostat Électrique",
+                        de = "Elektrischen Thermostat prüfen",
+                    ).forLocale(),
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            when (state) {
+                is TcvCheckState.Idle -> {
+                    Button(
+                        onClick  = onStart,
+                        enabled  = isConnected,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors   = ButtonDefaults.buttonColors(containerColor = DarkPrimary),
+                        shape    = RoundedCornerShape(8.dp),
+                    ) {
+                        Icon(Icons.Filled.Search, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text(
+                            LocalizedText(
+                                en = "Start Check",
+                                ka = "შემოწმების დაწყება",
+                                ru = "Начать проверку",
+                                es = "Iniciar Verificación",
+                                fr = "Démarrer la Vérification",
+                                de = "Prüfung starten",
+                            ).forLocale(),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
+                    if (!isConnected) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            LocalizedText(
+                                en = "Connect OBD adapter to run diagnostic check",
+                                ka = "OBD ადაპტერი მიუერთეთ დიაგნოსტიკური შემოწმებისთვის",
+                                ru = "Подключите OBD адаптер для диагностической проверки",
+                                es = "Conecte el adaptador OBD para ejecutar la verificación",
+                                fr = "Connectez l'adaptateur OBD pour lancer le diagnostic",
+                                de = "OBD-Adapter verbinden, um die Diagnose durchzuführen",
+                            ).forLocale(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurface.copy(0.45f),
+                        )
+                    }
+                }
+
+                is TcvCheckState.Scanning -> {
+                    Text(
+                        LocalizedText(
+                            en = "Scanning for thermostat fault codes…",
+                            ka = "თერმოსტატის გაუმართაობის კოდების სკანირება…",
+                            ru = "Поиск кодов неисправности термостата…",
+                            es = "Escaneando códigos de falla del termostato…",
+                            fr = "Recherche des codes de défaut du thermostat…",
+                            de = "Suche nach Thermostat-Fehlercodes…",
+                        ).forLocale(),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(0.7f),
+                    )
+                    Spacer(Modifier.height(8.dp))
+                    LinearProgressIndicator(
+                        progress = { state.progress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                    )
+                }
+
+                is TcvCheckState.FaultFound -> {
+                    Surface(
+                        color    = DarkError.copy(0.12f),
+                        shape    = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.Warning, contentDescription = null,
+                                    tint = DarkError, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    LocalizedText(
+                                        en = "⚠ Electric Thermostat Fault Detected",
+                                        ka = "⚠ ელექტრო თერმოსტატი გაუმართავია",
+                                        ru = "⚠ Обнаружена неисправность электронного термостата",
+                                        es = "⚠ Falla del Termostato Eléctrico Detectada",
+                                        fr = "⚠ Défaut du Thermostat Électrique Détecté",
+                                        de = "⚠ Fehler am elektrischen Thermostat erkannt",
+                                    ).forLocale(),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = DarkError,
+                                )
+                            }
+                            Spacer(Modifier.height(8.dp))
+                            state.codes.forEach { code ->
+                                Text(
+                                    "$code — ${tcvCodeDescription(code).forLocale()}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(0.85f),
+                                    modifier = Modifier.padding(bottom = 3.dp),
+                                )
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                LocalizedText(
+                                    en = "The electric thermostat (Thermo Control Valve) is faulty and requires replacement or repair. Check Subaru warranty extension (TSB 09-75-21) — Subaru extended coverage to 15 years/150,000 miles for this component.",
+                                    ka = "ელექტრო თერმოსტატი (Thermo Control Valve) გაუმართავია და სჭირდება შეცვლა ან შეკეთება. შეამოწმეთ Subaru-ს გარანტიის გაფართოება (TSB 09-75-21) — Subaru-მ გაახანგრძლივა გარანტია 15 წლამდე / 150,000 მაილამდე ამ კომპონენტზე.",
+                                    ru = "Электронный термостат (Thermo Control Valve) неисправен и требует замены или ремонта. Проверьте расширение гарантии Subaru (TSB 09-75-21) — Subaru продлила покрытие до 15 лет/150 000 миль на этот компонент.",
+                                    es = "El termostato eléctrico (Thermo Control Valve) está defectuoso y requiere reemplazo o reparación. Verifique la extensión de garantía de Subaru (TSB 09-75-21) — Subaru extendió la cobertura a 15 años/150,000 millas para este componente.",
+                                    fr = "Le thermostat électrique (Thermo Control Valve) est défectueux et nécessite un remplacement ou une réparation. Vérifiez l'extension de garantie Subaru (TSB 09-75-21) — Subaru a étendu la couverture à 15 ans/150 000 miles pour ce composant.",
+                                    de = "Der elektrische Thermostat (Thermo Control Valve) ist defekt und muss ersetzt oder repariert werden. Prüfen Sie die Subaru-Garantieverlängerung (TSB 09-75-21) — Subaru hat die Abdeckung auf 15 Jahre/150.000 Meilen für dieses Bauteil erweitert.",
+                                ).forLocale(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(0.8f),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick  = onReset,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape    = RoundedCornerShape(8.dp),
+                    ) {
+                        Text(
+                            LocalizedText(
+                                en = "Check Again",
+                                ka = "ხელახლა შემოწმება",
+                                ru = "Проверить снова",
+                                es = "Verificar de Nuevo",
+                                fr = "Vérifier à Nouveau",
+                                de = "Erneut prüfen",
+                            ).forLocale(),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
+                }
+
+                is TcvCheckState.Ok -> {
+                    Surface(
+                        color    = DarkSuccess.copy(0.12f),
+                        shape    = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.CheckCircle, contentDescription = null,
+                                    tint = DarkSuccess, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    LocalizedText(
+                                        en = "✓ Electric Thermostat OK",
+                                        ka = "✓ ელექტრო თერმოსტატი გამართულია",
+                                        ru = "✓ Электронный термостат в норме",
+                                        es = "✓ Termostato Eléctrico OK",
+                                        fr = "✓ Thermostat Électrique OK",
+                                        de = "✓ Elektrischer Thermostat OK",
+                                    ).forLocale(),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = DarkSuccess,
+                                )
+                            }
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                LocalizedText(
+                                    en = "No thermostat fault codes detected. System appears to be functioning normally.",
+                                    ka = "თერმოსტატის გაუმართაობის კოდები არ აღმოჩნდა. სისტემა ნორმალურად მუშაობს.",
+                                    ru = "Коды неисправности термостата не обнаружены. Система, по всей видимости, функционирует нормально.",
+                                    es = "No se detectaron códigos de falla del termostato. El sistema parece estar funcionando normalmente.",
+                                    fr = "Aucun code de défaut du thermostat détecté. Le système semble fonctionner normalement.",
+                                    de = "Keine Thermostat-Fehlercodes erkannt. Das System scheint normal zu funktionieren.",
+                                ).forLocale(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface.copy(0.8f),
+                            )
+                        }
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick  = onReset,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape    = RoundedCornerShape(8.dp),
+                    ) {
+                        Text(
+                            LocalizedText(
+                                en = "Check Again",
+                                ka = "ხელახლა შემოწმება",
+                                ru = "Проверить снова",
+                                es = "Verificar de Nuevo",
+                                fr = "Vérifier à Nouveau",
+                                de = "Erneut prüfen",
+                            ).forLocale(),
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun tcvCodeDescription(code: String): LocalizedText = when (code) {
+    "P26A3" -> LocalizedText(
+        en = "Engine Coolant Bypass Valve Position Sensor Circuit Range/Performance",
+        ka = "გამაგრილებლის შემოვლითი სარქვლის პოზიციის სენსორის სქემა — დიაპაზონი/მუშაობა",
+        ru = "Цепь датчика положения байпасного клапана охлаждения — диапазон/производительность",
+        es = "Rango/Rendimiento del Circuito del Sensor de Posición de la Válvula de Bypass",
+        fr = "Plage/Performance du Circuit du Capteur de la Soupape de Contournement",
+        de = "Bereich/Leistung des Positionssensors des Kühlmittel-Bypassventils",
+    )
+    "P26A5" -> LocalizedText(
+        en = "Engine Coolant Bypass Valve Position Sensor Circuit Low",
+        ka = "გამაგრილებლის შემოვლითი სარქვლის პოზიციის სენსორის სქემა — დაბალი",
+        ru = "Цепь датчика положения байпасного клапана охлаждения — низкий сигнал",
+        es = "Señal Baja del Circuito del Sensor de Posición de la Válvula de Bypass",
+        fr = "Signal Bas du Circuit du Capteur de la Soupape de Contournement",
+        de = "Niedriges Signal des Positionssensors des Kühlmittel-Bypassventils",
+    )
+    "P2682" -> LocalizedText(
+        en = "Engine Coolant Bypass Valve Control Circuit Low",
+        ka = "გამაგრილებლის შემოვლითი სარქვლის მართვის სქემა — დაბალი",
+        ru = "Цепь управления байпасным клапаном охлаждения — низкий сигнал",
+        es = "Señal Baja del Circuito de Control de la Válvula de Bypass",
+        fr = "Signal Bas du Circuit de Commande de la Soupape de Contournement",
+        de = "Niedriges Signal des Steuerschaltkreises des Kühlmittel-Bypassventils",
+    )
+    else -> LocalizedText(en = "Unknown thermostat code")
 }
 
 @Composable

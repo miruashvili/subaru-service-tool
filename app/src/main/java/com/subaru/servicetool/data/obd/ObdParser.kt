@@ -98,6 +98,32 @@ object ObdParser {
         return count
     }
 
+    /**
+     * Scans a Mode 03 response specifically for TCV fault codes P26A3, P26A5, P2682.
+     * Unlike parseDtcCodes, this does not apply the decimal-digit filter so hex-digit
+     * codes are matched by raw byte value.
+     */
+    fun parseTcvCodes(response: String): List<String> {
+        val tokens = tokenize(response) ?: return emptyList()
+        if (tokens.size < 3) return emptyList()
+        val idx = tokens.indexOfFirst { it == "43" }
+        if (idx < 0 || idx > 2) return emptyList()
+        val dtcTokens = tokens.drop(idx + 1)
+        val found = mutableListOf<String>()
+        var i = 0
+        while (i + 1 < dtcTokens.size) {
+            val hi = dtcTokens[i].toIntOrNull(16) ?: 0
+            val lo = dtcTokens[i + 1].toIntOrNull(16) ?: 0
+            when {
+                hi == 0x26 && lo == 0xA3 -> found.add("P26A3")
+                hi == 0x26 && lo == 0xA5 -> found.add("P26A5")
+                hi == 0x26 && lo == 0x82 -> found.add("P2682")
+            }
+            i += 2
+        }
+        return found.distinct()
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private fun parseDataBytes(response: String, mode: Int, pidHex: String): List<Int>? {

@@ -111,7 +111,6 @@ fun DashboardScreen(
     val connLost    by viewModel.connectionLostVisible.collectAsState()
     val editingSlot by viewModel.editingSlot.collectAsState()
     val gaugeSlots  by viewModel.currentGaugeSlots.collectAsState()
-    val vehicle     by viewModel.vehicle.collectAsState()
 
     LaunchedEffect(Unit) {
         viewModel.navigateToBluetooth.collect { onNavigateToBluetooth() }
@@ -125,11 +124,10 @@ fun DashboardScreen(
             sheetState = sheetState,
         ) {
             GaugeSelectorSheet(
-                pids      = viewModel.configurablePids,
-                isTurbo   = vehicle?.isTurbo == true,
+                pids       = viewModel.configurablePids,
                 currentCmd = gaugeSlots.getOrNull(editingSlot!!) ?: "",
-                onSelect  = { pid -> viewModel.setGaugeSlot(editingSlot!!, pid.cmd) },
-                onDismiss = viewModel::closeGaugeEditor,
+                onSelect   = { pid -> viewModel.setGaugeSlot(editingSlot!!, pid.cmd) },
+                onDismiss  = viewModel::closeGaugeEditor,
             )
         }
     }
@@ -560,7 +558,6 @@ private fun MetricCard(metric: LiveMetric, onEdit: () -> Unit) {
 @Composable
 private fun GaugeSelectorSheet(
     pids: List<ObdPid>,
-    isTurbo: Boolean,
     currentCmd: String,
     onSelect: (ObdPid) -> Unit,
     onDismiss: () -> Unit,
@@ -575,14 +572,11 @@ private fun GaugeSelectorSheet(
         HorizontalDivider()
         LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
             items(pids) { pid ->
-                val isTurboOnly = pid.cmd == ObdPids.OIL_TEMP.cmd
                 val isSelected = pid.cmd == currentCmd
-                val enabled = !isTurboOnly || isTurbo
 
                 Surface(
-                    onClick = { if (enabled) onSelect(pid) },
+                    onClick = { onSelect(pid) },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = enabled,
                     color = if (isSelected) DarkPrimary.copy(0.08f) else Color.Transparent,
                 ) {
                     Row(
@@ -590,16 +584,13 @@ private fun GaugeSelectorSheet(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Icon(metricIcon(pid.toMetricIconEnum()), contentDescription = null,
-                            tint = if (enabled) DarkPrimary else MaterialTheme.colorScheme.onSurface.copy(0.3f),
+                            tint = DarkPrimary,
                             modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(14.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(pid.name,
                                 style = MaterialTheme.typography.bodyMedium,
-                                color = if (enabled) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurface.copy(0.4f))
-                            if (isTurboOnly && !isTurbo) {
-                                Text("Turbo models only", style = MaterialTheme.typography.labelSmall, color = DarkWarning)
-                            }
+                                color = MaterialTheme.colorScheme.onSurface)
                         }
                         Text(pid.unit, style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(0.45f))

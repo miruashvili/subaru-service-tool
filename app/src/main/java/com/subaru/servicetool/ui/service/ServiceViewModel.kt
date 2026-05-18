@@ -133,9 +133,20 @@ class ServiceViewModel @Inject constructor(
 
     init {
         observeSensorValues()
+        observeConnectionState()
     }
 
     // ── Live sensor observation ───────────────────────────────────────────────
+
+    private fun observeConnectionState() {
+        viewModelScope.launch {
+            btManager.connectionState.collect { state ->
+                if (state !is BluetoothConnectionState.Connected) {
+                    activeDtcCodes.clear()
+                }
+            }
+        }
+    }
 
     private fun observeSensorValues() {
         viewModelScope.launch {

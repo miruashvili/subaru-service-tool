@@ -15,6 +15,7 @@ import com.subaru.servicetool.data.preferences.UserPreferences
 import com.subaru.servicetool.data.util.UnitConverter
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -110,17 +111,21 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
+    private val defaultSlots = listOf("010C", "010D", "0105", "0111")
+
+    private val slotsAndUnits: Flow<Pair<List<String>, DisplayUnits>> =
+        gaugeSlots.combine(userPreferences.displayUnits) { slots, units -> slots to units }
+
     val uiState: StateFlow<DashboardUiState> = combine(
         selectedVehicle,
         bluetoothManager.connectionState,
         obdEngine.sensorValues,
         obdEngine.dtcCount,
-        userPreferences.displayUnits,
-    ) { vehicle, btState, sensorValues, dtcCount, units ->
+        slotsAndUnits,
+    ) { vehicle, btState, sensorValues, dtcCount, (slots, units) ->
         val obdState  = btState.toObdState()
         val connected = obdState == ObdConnectionState.CONNECTED
         val ssmFallback = vehicle?.ssmSupported == true
-        val slots = gaugeSlots.value
         DashboardUiState(
             vehicle             = vehicle,
             connectionState     = obdState,
@@ -132,7 +137,11 @@ class DashboardViewModel @Inject constructor(
             ambientTemp         = if (connected) sensorValues[ObdPids.AMBIENT_TEMP.cmd] else null,
             fuelConsumption     = computeFuelConsumption(sensorValues, units),
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), DashboardUiState())
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5_000),
+        DashboardUiState(metrics = emptySlotMetrics(defaultSlots)),
+    )
 
     private fun computeFuelConsumption(values: Map<String, Float>, units: DisplayUnits): FuelConsumptionState {
         val maf   = values[ObdPids.MAF.cmd]

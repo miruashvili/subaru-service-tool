@@ -31,6 +31,10 @@ class MainActivity : ComponentActivity() {
         val lang = prefs.getString("language", "") ?: ""
         if (lang.isNotEmpty()) {
             val locale = Locale.forLanguageTag(lang)
+            // setDefault makes Locale.getDefault() return the chosen locale throughout the
+            // process, which is required for our forLocale() helpers to work correctly.
+            // createConfigurationContext alone only affects resource resolution, not the JVM default.
+            Locale.setDefault(locale)
             val config = Configuration(newBase.resources.configuration)
             config.setLocale(locale)
             super.attachBaseContext(newBase.createConfigurationContext(config))

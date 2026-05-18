@@ -127,13 +127,16 @@ class OBDBluetoothManager @Inject constructor(
             try {
                 connectBleInternal(device)
             } catch (e: CancellationException) {
+                // disconnect() cancelled us — it already released the lock
+                connectionLock.set(false)
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Unexpected BLE error", e)
                 handleDisconnect(e.message ?: "BLE error")
-            } finally {
-                connectionLock.set(false)
             }
+            // No finally: handleDisconnect owns the lock on all non-cancel paths.
+            // A finally block would race with the reconnect coroutine that has already
+            // re-acquired the lock inside handleDisconnect.
         }
     }
 
@@ -149,12 +152,11 @@ class OBDBluetoothManager @Inject constructor(
             try {
                 connectSppInternal(device)
             } catch (e: CancellationException) {
+                connectionLock.set(false)
                 throw e
             } catch (e: Exception) {
                 Log.e(TAG, "Unexpected SPP error", e)
                 handleDisconnect(e.message ?: "SPP error")
-            } finally {
-                connectionLock.set(false)
             }
         }
     }

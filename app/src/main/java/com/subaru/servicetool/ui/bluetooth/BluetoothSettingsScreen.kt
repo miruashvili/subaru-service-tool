@@ -169,8 +169,7 @@ fun BluetoothSettingsScreen(
                     DeviceRow(
                         item = item,
                         isConnected = item.address == connectedMac,
-                        isConnecting = connectionState is BluetoothConnectionState.Connecting ||
-                                connectionState is BluetoothConnectionState.Reconnecting,
+                        isConnecting = item.address == viewModel.connectingAddress,
                         onConnect = { viewModel.connect(item) },
                         onDisconnect = { viewModel.disconnect() },
                     )
@@ -221,8 +220,7 @@ fun BluetoothSettingsScreen(
                     DeviceRow(
                         item = item,
                         isConnected = item.address == connectedMac,
-                        isConnecting = connectionState is BluetoothConnectionState.Connecting ||
-                                connectionState is BluetoothConnectionState.Reconnecting,
+                        isConnecting = item.address == viewModel.connectingAddress,
                         onConnect = { viewModel.connect(item) },
                         onDisconnect = { viewModel.disconnect() },
                     )

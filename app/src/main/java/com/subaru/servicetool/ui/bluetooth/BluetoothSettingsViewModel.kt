@@ -18,6 +18,9 @@ import com.subaru.servicetool.data.bluetooth.OBDBluetoothManager
 import com.subaru.servicetool.data.bluetooth.OBDConnectionType
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -40,6 +43,9 @@ class BluetoothSettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     val connectionState: StateFlow<BluetoothConnectionState> = obdManager.connectionState
+
+    var connectingAddress by mutableStateOf<String?>(null)
+        private set
 
     private val _pairedDevices = MutableStateFlow<List<BtDeviceItem>>(emptyList())
     val pairedDevices: StateFlow<List<BtDeviceItem>> = _pairedDevices.asStateFlow()
@@ -76,6 +82,15 @@ class BluetoothSettingsViewModel @Inject constructor(
     init {
         // Silently ignored if BT permission not yet granted; composable re-calls after permission grant
         try { refreshPairedDevices() } catch (_: Exception) { }
+        viewModelScope.launch {
+            connectionState.collect { state ->
+                if (state is BluetoothConnectionState.Connected ||
+                    state is BluetoothConnectionState.Disconnected ||
+                    state is BluetoothConnectionState.Error) {
+                    connectingAddress = null
+                }
+            }
+        }
     }
 
     @SuppressLint("MissingPermission")
@@ -134,6 +149,7 @@ class BluetoothSettingsViewModel @Inject constructor(
     }
 
     fun connect(item: BtDeviceItem) {
+        connectingAddress = item.address
         when (item.connectionType) {
             OBDConnectionType.BLE -> obdManager.connectBle(item.device)
             OBDConnectionType.SPP -> obdManager.connectSpp(item.device)

@@ -35,16 +35,24 @@ enum class MetricAlertLevel { NONE, WARNING, CRITICAL }
 
 data class LiveMetric(
     val id: String,
+    val cmd: String = "",
     val label: String,
     val value: String,
     val unit: String,
     val iconRes: MetricIcon,
     val highlight: Boolean = false,
-    val fraction: Float? = null,        // 0..1 for arc gauge, null when no data
+    val fraction: Float? = null,
     val alertLevel: MetricAlertLevel = MetricAlertLevel.NONE,
 )
 
 enum class MetricIcon { RPM, SPEED, TEMP, THROTTLE, VOLTAGE, INTAKE, FUEL, OIL, AMBIENT, ENGINE_LOAD, MAP, MAF, CVT, AWD }
+
+data class TpmsData(
+    val fl: Float? = null,
+    val fr: Float? = null,
+    val rl: Float? = null,
+    val rr: Float? = null,
+)
 
 data class FuelConsumptionState(
     val instantL100: Float? = null,
@@ -52,6 +60,8 @@ data class FuelConsumptionState(
     val sampleCount: Int = 0,
     val averageMpg: Float? = null,
     val instantMpg: Float? = null,
+    val instantKml: Float? = null,
+    val averageKml: Float? = null,
 )
 
 data class DashboardUiState(
@@ -59,12 +69,21 @@ data class DashboardUiState(
     val connectionState: ObdConnectionState = ObdConnectionState.DISCONNECTED,
     val connectedDeviceName: String? = null,
     val metrics: List<LiveMetric> = emptyList(),
+    val wideMetrics: List<LiveMetric> = emptyList(),
     val dtcCount: Int = 0,
     val errorMessage: String? = null,
     val ssmFallback: Boolean = false,
     val ambientTemp: Float? = null,
     val fuelConsumption: FuelConsumptionState = FuelConsumptionState(),
-    val awdDuty: Float? = null,         // rear torque % from TCU; null = no data / disconnected
+    val awdDuty: Float? = null,
+    val tpmsData: TpmsData = TpmsData(),
+    val displayUnits: DisplayUnits = DisplayUnits(),
+)
+
+private data class SlotsUnitsWide(
+    val slots: List<String>,
+    val units: DisplayUnits,
+    val wideSlots: List<String>,
 )
 
 @HiltViewModel
@@ -81,8 +100,26 @@ class DashboardViewModel @Inject constructor(
     private val gaugeSlots: StateFlow<List<String>> = userPreferences.gaugeSlots
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf("0105", "221017", "010C", "010D"))
 
+    private val allSlotsFlow: Flow<SlotsUnitsWide> = combine(
+        gaugeSlots,
+        userPreferences.displayUnits,
+        userPreferences.wideGaugeSlots,
+    ) { slots, units, wideSlots -> SlotsUnitsWide(slots, units, wideSlots) }
+
+    // ── Grid gauge editing ────────────────────────────────────────────────────
+
     private val _editingSlot = MutableStateFlow<Int?>(null)
     val editingSlot: StateFlow<Int?> = _editingSlot.asStateFlow()
+
+    // ── Wide gauge editing (portrait) ─────────────────────────────────────────
+
+    private val _editingWideSlot = MutableStateFlow<Int?>(null)
+    val editingWideSlot: StateFlow<Int?> = _editingWideSlot.asStateFlow()
+
+    // ── Landscape bottom slot editing ─────────────────────────────────────────
+
+    private val _editingLsSlot = MutableStateFlow<Int?>(null)
+    val editingLsSlot: StateFlow<Int?> = _editingLsSlot.asStateFlow()
 
     // ── Fuel consumption accumulator ──────────────────────────────────────────
 
@@ -93,7 +130,6 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             userPreferences.fuelAvgResetTs.collect { _fuelResetTs.value = it }
         }
-        // Clear fuel samples on disconnect
         viewModelScope.launch {
             bluetoothManager.connectionState.collect { state ->
                 if (state !is BluetoothConnectionState.Connected) {
@@ -101,12 +137,11 @@ class DashboardViewModel @Inject constructor(
                 }
             }
         }
-        // Accumulate fuel samples
         viewModelScope.launch {
             obdEngine.sensorValues.collect { values ->
                 val maf   = values[ObdPids.MAF.cmd]   ?: return@collect
                 val speed = values[ObdPids.SPEED.cmd] ?: return@collect
-                if (speed < 2f) return@collect  // ignore at near-zero speed
+                if (speed < 2f) return@collect
                 val instant = (maf * 3600f) / (14.7f * 0.745f * speed * 10f)
                 if (instant in 0.1f..99f) {
                     _fuelSamples.update { it + instant }
@@ -115,18 +150,16 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    private val defaultSlots = listOf("0105", "221017", "010C", "010D")
-
-    private val slotsAndUnits: Flow<Pair<List<String>, DisplayUnits>> =
-        gaugeSlots.combine(userPreferences.displayUnits) { slots, units -> slots to units }
+    private val defaultSlots     = listOf("0105", "221017", "010C", "010D")
+    private val defaultWideSlots = listOf("221018", "01C1")
 
     val uiState: StateFlow<DashboardUiState> = combine(
         selectedVehicle,
         bluetoothManager.connectionState,
         obdEngine.sensorValues,
         obdEngine.dtcCount,
-        slotsAndUnits,
-    ) { vehicle, btState, sensorValues, dtcCount, (slots, units) ->
+        allSlotsFlow,
+    ) { vehicle, btState, sensorValues, dtcCount, allSlots ->
         val obdState  = btState.toObdState()
         val connected = obdState == ObdConnectionState.CONNECTED
         val ssmFallback = vehicle?.ssmSupported == true
@@ -134,19 +167,49 @@ class DashboardViewModel @Inject constructor(
             vehicle             = vehicle,
             connectionState     = obdState,
             connectedDeviceName = (btState as? BluetoothConnectionState.Connected)?.deviceName,
-            metrics             = if (connected) sensorValues.toSlotMetrics(slots, units) else emptySlotMetrics(slots),
+            metrics             = if (connected) sensorValues.toSlotMetrics(allSlots.slots, allSlots.units) else emptySlotMetrics(allSlots.slots),
+            wideMetrics         = if (connected) sensorValues.toWideSlotMetrics(allSlots.wideSlots, allSlots.units) else emptyWideSlotMetrics(allSlots.wideSlots),
             dtcCount            = if (connected) dtcCount else 0,
             errorMessage        = (btState as? BluetoothConnectionState.Error)?.message,
             ssmFallback         = connected && ssmFallback,
             ambientTemp         = if (connected) sensorValues[ObdPids.AMBIENT_TEMP.cmd] else null,
-            fuelConsumption     = computeFuelConsumption(sensorValues, units),
+            fuelConsumption     = computeFuelConsumption(sensorValues, allSlots.units),
             awdDuty             = if (connected) sensorValues[ObdPids.AWD_DUTY.cmd] else null,
+            tpmsData            = if (connected) TpmsData(
+                fl = sensorValues[ObdPids.TPMS_FL.cmd],
+                fr = sensorValues[ObdPids.TPMS_FR.cmd],
+                rl = sensorValues[ObdPids.TPMS_RL.cmd],
+                rr = sensorValues[ObdPids.TPMS_RR.cmd],
+            ) else TpmsData(),
+            displayUnits        = allSlots.units,
         )
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000),
-        DashboardUiState(metrics = emptySlotMetrics(defaultSlots)),
+        DashboardUiState(
+            metrics     = emptySlotMetrics(defaultSlots),
+            wideMetrics = emptyWideSlotMetrics(defaultWideSlots),
+        ),
     )
+
+    // ── Landscape bottom metrics ──────────────────────────────────────────────
+
+    val landscapeBottomLayout: StateFlow<String> = userPreferences.landscapeBottomLayout
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "wide")
+
+    val landscapeBottomMetrics: StateFlow<List<LiveMetric>> = combine(
+        userPreferences.landscapeBottomLayout,
+        userPreferences.landscapeBottomSlots,
+        obdEngine.sensorValues,
+        userPreferences.displayUnits,
+    ) { layout, allLsSlots, sensorValues, units ->
+        val slots = if (layout == "wide") allLsSlots.take(2) else allLsSlots.drop(2)
+        slots.mapIndexed { i, cmd ->
+            val pid    = ObdPids.CONFIGURABLE.find { it.cmd == cmd } ?: ObdPids.RPM
+            val rawVal = sensorValues[cmd]
+            pidToMetric(i, pid, rawVal, units).copy(id = "ls_$i", cmd = pid.cmd)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private fun computeFuelConsumption(values: Map<String, Float>, units: DisplayUnits): FuelConsumptionState {
         val maf   = values[ObdPids.MAF.cmd]
@@ -154,15 +217,17 @@ class DashboardViewModel @Inject constructor(
         val instant = if (maf != null && speed != null && speed >= 2f)
             (maf * 3600f) / (14.7f * 0.745f * speed * 10f)
         else null
-        val samples = _fuelSamples.value
-        val avg = if (samples.size >= 3) samples.average().toFloat() else null
-        val usePsi = units.pressureUnit == "psi"
+        val samples   = _fuelSamples.value
+        val avg       = if (samples.size >= 3) samples.average().toFloat() else null
+        val fuelUnit  = units.fuelUnit
         return FuelConsumptionState(
-            instantL100  = instant?.takeIf { it in 0.1f..99f },
-            averageL100  = avg?.takeIf { it in 0.1f..99f },
-            sampleCount  = samples.size,
-            instantMpg   = instant?.let { if (usePsi && it > 0f) 235.214f / it else null },
-            averageMpg   = avg?.let { if (usePsi && it > 0f) 235.214f / it else null },
+            instantL100 = if (fuelUnit == "L100") instant?.takeIf { it in 0.1f..99f } else null,
+            averageL100 = if (fuelUnit == "L100") avg?.takeIf { it in 0.1f..99f } else null,
+            sampleCount = samples.size,
+            instantMpg  = if (fuelUnit == "MPG") instant?.let { if (it > 0f) 235.214f / it else null } else null,
+            averageMpg  = if (fuelUnit == "MPG") avg?.let { if (it > 0f) 235.214f / it else null } else null,
+            instantKml  = if (fuelUnit == "KML") instant?.let { if (it > 0f) 100f / it else null } else null,
+            averageKml  = if (fuelUnit == "KML") avg?.let { if (it > 0f) 100f / it else null } else null,
         )
     }
 
@@ -219,7 +284,7 @@ class DashboardViewModel @Inject constructor(
 
     fun disconnect() = bluetoothManager.disconnect()
 
-    // ── Gauge editing ─────────────────────────────────────────────────────────
+    // ── Grid gauge editing ────────────────────────────────────────────────────
 
     fun openGaugeEditor(slot: Int) { _editingSlot.value = slot }
     fun closeGaugeEditor() { _editingSlot.value = null }
@@ -227,6 +292,26 @@ class DashboardViewModel @Inject constructor(
     fun setGaugeSlot(slot: Int, pidCmd: String) {
         _editingSlot.value = null
         viewModelScope.launch { userPreferences.setGaugeSlot(slot, pidCmd) }
+    }
+
+    // ── Wide gauge editing ────────────────────────────────────────────────────
+
+    fun openWideGaugeEditor(slot: Int) { _editingWideSlot.value = slot }
+    fun closeWideGaugeEditor() { _editingWideSlot.value = null }
+
+    fun setWideGaugeSlot(slot: Int, pidCmd: String) {
+        _editingWideSlot.value = null
+        viewModelScope.launch { userPreferences.setWideGaugeSlot(slot, pidCmd) }
+    }
+
+    // ── Landscape bottom slot editing ─────────────────────────────────────────
+
+    fun openLsGaugeEditor(slot: Int) { _editingLsSlot.value = slot }
+    fun closeLsGaugeEditor() { _editingLsSlot.value = null }
+
+    fun setLandscapeSlot(slot: Int, pidCmd: String) {
+        _editingLsSlot.value = null
+        viewModelScope.launch { userPreferences.setLandscapeSlot(slot, pidCmd) }
     }
 
     // ── Fuel avg reset ────────────────────────────────────────────────────────
@@ -242,7 +327,14 @@ class DashboardViewModel @Inject constructor(
 
     val configurablePids: List<ObdPid> = ObdPids.CONFIGURABLE
 
+    val configurableWidePids: List<ObdPid> = ObdPids.CONFIGURABLE +
+        ObdPids.AWD_DUTY +
+        ObdPids.TPMS_FL.copy(name = "TPMS Pressure (All)")
+
     val currentGaugeSlots: StateFlow<List<String>> = gaugeSlots
+
+    val currentWideGaugeSlots: StateFlow<List<String>> = userPreferences.wideGaugeSlots
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf("221018", "01C1"))
 }
 
 // ── Extension helpers ─────────────────────────────────────────────────────────
@@ -262,15 +354,42 @@ private fun Map<String, Float>.toSlotMetrics(slots: List<String>, units: Display
         pidToMetric(i, pid, rawVal, units)
     }
 
+private fun Map<String, Float>.toWideSlotMetrics(slots: List<String>, units: DisplayUnits): List<LiveMetric> =
+    slots.mapIndexed { i, cmd ->
+        val pid = ObdPids.CONFIGURABLE.find { it.cmd == cmd }
+            ?: ObdPids.TPMS.find { it.cmd == cmd }
+            ?: if (cmd == ObdPids.AWD_DUTY.cmd) ObdPids.AWD_DUTY else null
+            ?: ObdPids.RPM
+        val rawVal = this[cmd]
+        pidToMetric(i, pid, rawVal, units).copy(id = "wide_$i", cmd = pid.cmd)
+    }
+
 internal fun emptySlotMetrics(slots: List<String>): List<LiveMetric> =
     slots.mapIndexed { i, cmd ->
         val pid = ObdPids.CONFIGURABLE.find { it.cmd == cmd } ?: ObdPids.RPM
         LiveMetric(
-            id       = "slot_$i",
-            label    = pid.name,
-            value    = "--",
-            unit     = pid.unit,
-            iconRes  = pid.toMetricIcon(),
+            id      = "slot_$i",
+            cmd     = pid.cmd,
+            label   = pid.name,
+            value   = "--",
+            unit    = pid.unit,
+            iconRes = pid.toMetricIcon(),
+        )
+    }
+
+internal fun emptyWideSlotMetrics(slots: List<String>): List<LiveMetric> =
+    slots.mapIndexed { i, cmd ->
+        val pid = ObdPids.CONFIGURABLE.find { it.cmd == cmd }
+            ?: ObdPids.TPMS.find { it.cmd == cmd }
+            ?: if (cmd == ObdPids.AWD_DUTY.cmd) ObdPids.AWD_DUTY else null
+            ?: ObdPids.RPM
+        LiveMetric(
+            id      = "wide_$i",
+            cmd     = pid.cmd,
+            label   = pid.name,
+            value   = "--",
+            unit    = pid.unit,
+            iconRes = pid.toMetricIcon(),
         )
     }
 
@@ -314,6 +433,7 @@ private fun pidToMetric(idx: Int, pid: ObdPid, rawVal: Float?, units: DisplayUni
 
     return LiveMetric(
         id         = "slot_$idx",
+        cmd        = pid.cmd,
         label      = pid.name,
         value      = displayVal,
         unit       = displayUnit,
@@ -350,8 +470,8 @@ private fun ObdPid.toMetricIcon(): MetricIcon = when (cmd) {
 }
 
 internal fun emptyMetrics() = listOf(
-    LiveMetric("rpm",      "Engine RPM",    "--", "rpm", MetricIcon.RPM),
-    LiveMetric("speed",    "Vehicle Speed", "--", "km/h", MetricIcon.SPEED),
-    LiveMetric("coolant",  "Coolant Temp",  "--", "°C",  MetricIcon.TEMP),
-    LiveMetric("throttle", "Throttle Pos",  "--", "%",   MetricIcon.THROTTLE),
+    LiveMetric("rpm",      "rpm",      "Engine RPM",    "--", "rpm", MetricIcon.RPM),
+    LiveMetric("speed",    "010D",     "Vehicle Speed", "--", "km/h", MetricIcon.SPEED),
+    LiveMetric("coolant",  "0105",     "Coolant Temp",  "--", "°C",  MetricIcon.TEMP),
+    LiveMetric("throttle", "0111",     "Throttle Pos",  "--", "%",   MetricIcon.THROTTLE),
 )

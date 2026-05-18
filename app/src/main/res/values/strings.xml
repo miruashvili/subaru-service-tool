@@ -224,4 +224,15 @@
     <string name="tip_8">Rotate tires every 20,000 km — move the rear tires to the front and the front tires to the rear. This ensures even wear.</string>
     <string name="tip_9">Avoid high RPM until the oil temperature reaches 75°C or more. Remember: when the coolant reaches operating temperature, the engine and transmission oil temperatures have still not reached their working temperature.</string>
     <string name="tip_10">During heavy loads (off-road or track driving) — monitor oil temperatures to avoid overheating and accidental damage!</string>
+
+    <!-- Fuel unit setting -->
+    <string name="settings_fuel_unit">Fuel Efficiency</string>
+    <string name="fuel_l100km">L/100km</string>
+    <string name="fuel_mpg">MPG</string>
+    <string name="fuel_kml">km/L</string>
+
+    <!-- Landscape bottom layout -->
+    <string name="settings_landscape_bottom">Bottom Layout</string>
+    <string name="settings_landscape_bottom_wide">2 Wide</string>
+    <string name="settings_landscape_bottom_square">4 Square</string>
 </resources>

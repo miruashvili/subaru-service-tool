@@ -34,6 +34,12 @@ class SettingsViewModel @Inject constructor(
     val pressureUnit: StateFlow<String> = userPreferences.pressureUnit
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "kpa")
 
+    val fuelUnit: StateFlow<String> = userPreferences.fuelUnit
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "L100")
+
+    val landscapeBottomLayout: StateFlow<String> = userPreferences.landscapeBottomLayout
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "wide")
+
     val language: StateFlow<String> = userPreferences.language
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
 
@@ -51,6 +57,14 @@ class SettingsViewModel @Inject constructor(
 
     fun setPressureUnit(unit: String) {
         viewModelScope.launch { userPreferences.setPressureUnit(unit) }
+    }
+
+    fun setFuelUnit(unit: String) {
+        viewModelScope.launch { userPreferences.setFuelUnit(unit) }
+    }
+
+    fun setLandscapeBottomLayout(layout: String) {
+        viewModelScope.launch { userPreferences.setLandscapeBottomLayout(layout) }
     }
 
     fun setLanguage(tag: String) {

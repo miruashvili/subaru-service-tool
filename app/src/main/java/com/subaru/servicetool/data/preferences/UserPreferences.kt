@@ -20,6 +20,7 @@ import javax.inject.Singleton
 data class DisplayUnits(
     val temperatureUnit: String = "celsius",  // "celsius" | "fahrenheit"
     val pressureUnit: String = "kpa",          // "kpa" | "bar" | "psi"
+    val fuelUnit: String = "L100",             // "L100" | "MPG" | "KML"
 )
 
 @Singleton
@@ -45,6 +46,16 @@ class UserPreferences @Inject constructor(
         private val KEY_GAUGE_SLOT_2     = stringPreferencesKey("gauge_slot_2")
         private val KEY_GAUGE_SLOT_3     = stringPreferencesKey("gauge_slot_3")
         private val KEY_FUEL_AVG_RESET   = stringPreferencesKey("fuel_avg_reset_ts")
+        private val KEY_FUEL_UNIT        = stringPreferencesKey("fuel_unit")
+        private val KEY_GAUGE_WIDE_0     = stringPreferencesKey("gauge_wide_0")
+        private val KEY_GAUGE_WIDE_1     = stringPreferencesKey("gauge_wide_1")
+        private val KEY_LS_BOTTOM_LAYOUT = stringPreferencesKey("landscape_bottom_layout")
+        private val KEY_LS_WIDE_0        = stringPreferencesKey("ls_wide_0")
+        private val KEY_LS_WIDE_1        = stringPreferencesKey("ls_wide_1")
+        private val KEY_LS_SQ_0          = stringPreferencesKey("ls_sq_0")
+        private val KEY_LS_SQ_1          = stringPreferencesKey("ls_sq_1")
+        private val KEY_LS_SQ_2          = stringPreferencesKey("ls_sq_2")
+        private val KEY_LS_SQ_3          = stringPreferencesKey("ls_sq_3")
     }
 
     // ── Vehicle & onboarding ──────────────────────────────────────────────────
@@ -102,8 +113,10 @@ class UserPreferences @Inject constructor(
     val temperatureUnit: Flow<String> = dataStore.data.map { it[KEY_TEMP_UNIT] ?: "celsius" }
     val pressureUnit: Flow<String>    = dataStore.data.map { it[KEY_PRESS_UNIT] ?: "kpa" }
 
-    val displayUnits: Flow<DisplayUnits> = combine(temperatureUnit, pressureUnit) { t, p ->
-        DisplayUnits(t, p)
+    val fuelUnit: Flow<String> = dataStore.data.map { it[KEY_FUEL_UNIT] ?: "L100" }
+
+    val displayUnits: Flow<DisplayUnits> = combine(temperatureUnit, pressureUnit, fuelUnit) { t, p, f ->
+        DisplayUnits(t, p, f)
     }
 
     suspend fun setTemperatureUnit(unit: String) {
@@ -112,6 +125,10 @@ class UserPreferences @Inject constructor(
 
     suspend fun setPressureUnit(unit: String) {
         dataStore.edit { it[KEY_PRESS_UNIT] = unit }
+    }
+
+    suspend fun setFuelUnit(unit: String) {
+        dataStore.edit { it[KEY_FUEL_UNIT] = unit }
     }
 
     // ── Language ──────────────────────────────────────────────────────────────
@@ -152,7 +169,7 @@ class UserPreferences @Inject constructor(
 
     // ── Gauge slots ───────────────────────────────────────────────────────────
 
-    private val defaultSlots = listOf("0105", "015D", "010C", "010D")
+    private val defaultSlots = listOf("0105", "221017", "010C", "010D")
 
     val gaugeSlots: Flow<List<String>> = dataStore.data.map { prefs ->
         listOf(
@@ -170,6 +187,57 @@ class UserPreferences @Inject constructor(
                 1 -> prefs[KEY_GAUGE_SLOT_1] = pidCmd
                 2 -> prefs[KEY_GAUGE_SLOT_2] = pidCmd
                 3 -> prefs[KEY_GAUGE_SLOT_3] = pidCmd
+            }
+        }
+    }
+
+    // ── Wide gauge slots (portrait full-width cards) ──────────────────────────
+
+    val wideGaugeSlots: Flow<List<String>> = dataStore.data.map { prefs ->
+        listOf(
+            prefs[KEY_GAUGE_WIDE_0] ?: "221018",
+            prefs[KEY_GAUGE_WIDE_1] ?: "01C1",
+        )
+    }
+
+    suspend fun setWideGaugeSlot(index: Int, pidCmd: String) {
+        dataStore.edit { prefs ->
+            when (index) {
+                0 -> prefs[KEY_GAUGE_WIDE_0] = pidCmd
+                1 -> prefs[KEY_GAUGE_WIDE_1] = pidCmd
+            }
+        }
+    }
+
+    // ── Landscape bottom layout ───────────────────────────────────────────────
+
+    val landscapeBottomLayout: Flow<String> = dataStore.data.map { it[KEY_LS_BOTTOM_LAYOUT] ?: "wide" }
+
+    suspend fun setLandscapeBottomLayout(layout: String) {
+        dataStore.edit { it[KEY_LS_BOTTOM_LAYOUT] = layout }
+    }
+
+    // All 6 landscape bottom slots: index 0..1 = "wide" layout, 2..5 = "square" layout
+    val landscapeBottomSlots: Flow<List<String>> = dataStore.data.map { prefs ->
+        listOf(
+            prefs[KEY_LS_WIDE_0] ?: "0110",
+            prefs[KEY_LS_WIDE_1] ?: "012F",
+            prefs[KEY_LS_SQ_0]   ?: "0104",
+            prefs[KEY_LS_SQ_1]   ?: "010B",
+            prefs[KEY_LS_SQ_2]   ?: "0106",
+            prefs[KEY_LS_SQ_3]   ?: "0107",
+        )
+    }
+
+    suspend fun setLandscapeSlot(index: Int, pidCmd: String) {
+        dataStore.edit { prefs ->
+            when (index) {
+                0 -> prefs[KEY_LS_WIDE_0] = pidCmd
+                1 -> prefs[KEY_LS_WIDE_1] = pidCmd
+                2 -> prefs[KEY_LS_SQ_0] = pidCmd
+                3 -> prefs[KEY_LS_SQ_1] = pidCmd
+                4 -> prefs[KEY_LS_SQ_2] = pidCmd
+                5 -> prefs[KEY_LS_SQ_3] = pidCmd
             }
         }
     }

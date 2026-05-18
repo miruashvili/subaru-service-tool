@@ -6,18 +6,27 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.DeviceThermostat
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationRail
@@ -31,6 +40,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -48,6 +58,10 @@ import com.subaru.servicetool.ui.dashboard.DashboardScreen
 import com.subaru.servicetool.ui.screens.SensorsScreen
 import com.subaru.servicetool.ui.screens.ServiceScreen
 import com.subaru.servicetool.ui.screens.SettingsScreen
+import com.subaru.servicetool.ui.theme.DarkError
+import com.subaru.servicetool.ui.theme.DarkPrimary
+import com.subaru.servicetool.ui.theme.DarkSuccess
+import com.subaru.servicetool.ui.theme.DarkWarning
 
 sealed class Screen(val route: String, val labelRes: Int, val icon: ImageVector) {
     object Dashboard : Screen("dashboard", R.string.nav_dashboard, Icons.Filled.Speed)
@@ -89,13 +103,27 @@ private fun MainNavHost() {
     val configuration  = LocalConfiguration.current
     val isLandscape    = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val showNavigation = currentRoute in tabRoutes
+    val mainViewModel: MainViewModel = hiltViewModel()
+    val ambientTemp by mainViewModel.ambientTemp.collectAsState()
 
     if (isLandscape) {
-        // ── Landscape: NavigationRail on the left ─────────────────────────
-        Row(Modifier.fillMaxSize()) {
+        // ── Landscape: content on left, NavigationRail on right ───────────
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background),
+        ) {
+            NavHost(
+                navController    = navController,
+                startDestination = Screen.Dashboard.route,
+                modifier         = Modifier.weight(1f),
+            ) {
+                landscapeComposables(navController)
+            }
             if (showNavigation) {
                 AppNavigationRail(
                     navBackStack = navBackStack,
+                    ambientTemp  = ambientTemp,
                     onNavigate   = { screen ->
                         navController.navigate(screen.route) {
                             popUpTo(navController.graph.findStartDestination().id) { saveState = true }
@@ -104,13 +132,6 @@ private fun MainNavHost() {
                         }
                     },
                 )
-            }
-            NavHost(
-                navController    = navController,
-                startDestination = Screen.Dashboard.route,
-                modifier         = Modifier.weight(1f),
-            ) {
-                landscapeComposables(navController)
             }
         }
     } else {
@@ -162,16 +183,64 @@ private fun AppNavigationBar(
 @Composable
 private fun AppNavigationRail(
     navBackStack: androidx.navigation.NavBackStackEntry?,
+    ambientTemp: Float?,
     onNavigate: (Screen) -> Unit,
 ) {
-    NavigationRail(modifier = Modifier.width(72.dp)) {
+    val screenWidthDp = LocalConfiguration.current.screenWidthDp
+    val railWidth = when {
+        screenWidthDp < 600  -> 64.dp
+        screenWidthDp <= 840 -> 72.dp
+        else                 -> 80.dp
+    }
+
+    NavigationRail(
+        modifier       = Modifier
+            .width(railWidth)
+            .background(MaterialTheme.colorScheme.surface),
+        containerColor = MaterialTheme.colorScheme.surface,
+    ) {
         val currentDest = navBackStack?.destination
+        Spacer(Modifier.weight(1f))
         bottomNavItems.forEach { screen ->
             NavigationRailItem(
                 icon     = { Icon(screen.icon, contentDescription = stringResource(screen.labelRes)) },
                 label    = null,
                 selected = currentDest?.hierarchy?.any { it.route == screen.route } == true,
                 onClick  = { onNavigate(screen) },
+            )
+        }
+        Spacer(Modifier.weight(1f))
+
+        // Ambient temperature display at the bottom of the rail
+        HorizontalDivider(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp),
+            color = MaterialTheme.colorScheme.onSurface.copy(0.12f),
+        )
+        Spacer(Modifier.height(8.dp))
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(bottom = 12.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Filled.DeviceThermostat,
+                contentDescription = null,
+                modifier = Modifier.size(16.dp),
+                tint = when {
+                    ambientTemp == null    -> MaterialTheme.colorScheme.onSurface.copy(0.3f)
+                    ambientTemp > 35f      -> DarkError
+                    ambientTemp > 25f      -> DarkWarning
+                    ambientTemp < 5f       -> DarkPrimary
+                    else                   -> DarkSuccess
+                },
+            )
+            Spacer(Modifier.height(2.dp))
+            Text(
+                text = if (ambientTemp != null) "%.0f°".format(ambientTemp) else "--",
+                fontSize = 16.sp,
+                color = MaterialTheme.colorScheme.onSurface,
+                style = MaterialTheme.typography.labelMedium,
             )
         }
     }

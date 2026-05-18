@@ -64,6 +64,8 @@ fun SettingsScreen(
     val landscape     by viewModel.landscapeEnabled.collectAsState()
     val tempUnit      by viewModel.temperatureUnit.collectAsState()
     val pressUnit     by viewModel.pressureUnit.collectAsState()
+    val fuelUnit      by viewModel.fuelUnit.collectAsState()
+    val lsBottomLayout by viewModel.landscapeBottomLayout.collectAsState()
     val language      by viewModel.language.collectAsState()
     val context       = LocalContext.current
 
@@ -152,6 +154,22 @@ fun SettingsScreen(
                 }
                 Switch(checked = landscape, onCheckedChange = viewModel::setLandscapeEnabled)
             }
+            Spacer(Modifier.height(12.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.15f))
+            Spacer(Modifier.height(12.dp))
+            SettingsRowLabel(stringResource(R.string.settings_landscape_bottom))
+            Spacer(Modifier.height(8.dp))
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                listOf("wide" to stringResource(R.string.settings_landscape_bottom_wide),
+                       "square" to stringResource(R.string.settings_landscape_bottom_square)).forEachIndexed { i, (key, label) ->
+                    SegmentedButton(
+                        selected = lsBottomLayout == key,
+                        onClick  = { viewModel.setLandscapeBottomLayout(key) },
+                        shape    = SegmentedButtonDefaults.itemShape(i, 2),
+                        label    = { Text(label, style = MaterialTheme.typography.labelMedium) },
+                    )
+                }
+            }
         }
 
         Spacer(Modifier.height(24.dp))
@@ -184,6 +202,23 @@ fun SettingsScreen(
                     SegmentedButton(
                         selected = pressUnit == key,
                         onClick  = { viewModel.setPressureUnit(key) },
+                        shape    = SegmentedButtonDefaults.itemShape(i, 3),
+                        label    = { Text(label, style = MaterialTheme.typography.labelMedium) },
+                    )
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(0.15f))
+            Spacer(Modifier.height(14.dp))
+            SettingsRowLabel(stringResource(R.string.settings_fuel_unit))
+            Spacer(Modifier.height(8.dp))
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                listOf("L100" to stringResource(R.string.fuel_l100km),
+                       "MPG"  to stringResource(R.string.fuel_mpg),
+                       "KML"  to stringResource(R.string.fuel_kml)).forEachIndexed { i, (key, label) ->
+                    SegmentedButton(
+                        selected = fuelUnit == key,
+                        onClick  = { viewModel.setFuelUnit(key) },
                         shape    = SegmentedButtonDefaults.itemShape(i, 3),
                         label    = { Text(label, style = MaterialTheme.typography.labelMedium) },
                     )

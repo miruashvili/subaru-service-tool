@@ -13,6 +13,15 @@ val DarkOnPrimary = Color(0xFFFFFFFF)
 val DarkOnBackground = Color(0xFFE8EAF0)
 val DarkOnSurface = Color(0xFFE8EAF0)
 
+// Gauge widget — dark theme specific
+val GaugeArcActive   = Color(0xFF3D8BFF)   // brighter blue for active arc
+val GaugeArcBg       = Color(0xFF1E2340)   // arc track background
+val GaugeCardBg      = Color(0xFF0F1320)   // gauge card surface
+val GaugeLabelColor  = Color(0xFFA0A8C0)   // sensor name label
+val GaugeUnitColor   = Color(0xFF7080A0)   // unit text (°C, rpm…)
+val GaugeTempWarn    = Color(0xFFFFA500)   // temperature warning arc
+val GaugeTempCrit    = Color(0xFFFF3333)   // temperature critical arc
+
 // Light theme
 val LightBackground = Color(0xFFEEF1F6)
 val LightSurface = Color(0xFFFFFFFF)

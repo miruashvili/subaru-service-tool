@@ -31,6 +31,8 @@ import javax.inject.Inject
 
 enum class ObdConnectionState { DISCONNECTED, CONNECTING, CONNECTED, ERROR }
 
+enum class MetricAlertLevel { NONE, WARNING, CRITICAL }
+
 data class LiveMetric(
     val id: String,
     val label: String,
@@ -38,10 +40,11 @@ data class LiveMetric(
     val unit: String,
     val iconRes: MetricIcon,
     val highlight: Boolean = false,
-    val fraction: Float? = null,  // 0..1 for arc gauge, null when no data
+    val fraction: Float? = null,        // 0..1 for arc gauge, null when no data
+    val alertLevel: MetricAlertLevel = MetricAlertLevel.NONE,
 )
 
-enum class MetricIcon { RPM, SPEED, TEMP, THROTTLE, VOLTAGE, INTAKE, FUEL, OIL, AMBIENT, ENGINE_LOAD, MAP, MAF, CVT }
+enum class MetricIcon { RPM, SPEED, TEMP, THROTTLE, VOLTAGE, INTAKE, FUEL, OIL, AMBIENT, ENGINE_LOAD, MAP, MAF, CVT, AWD }
 
 data class FuelConsumptionState(
     val instantL100: Float? = null,
@@ -61,6 +64,7 @@ data class DashboardUiState(
     val ssmFallback: Boolean = false,
     val ambientTemp: Float? = null,
     val fuelConsumption: FuelConsumptionState = FuelConsumptionState(),
+    val awdDuty: Float? = null,         // rear torque % from TCU; null = no data / disconnected
 )
 
 @HiltViewModel
@@ -75,7 +79,7 @@ class DashboardViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     private val gaugeSlots: StateFlow<List<String>> = userPreferences.gaugeSlots
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf("0105", "015D", "010C", "010D"))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf("0105", "221017", "010C", "010D"))
 
     private val _editingSlot = MutableStateFlow<Int?>(null)
     val editingSlot: StateFlow<Int?> = _editingSlot.asStateFlow()
@@ -111,7 +115,7 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    private val defaultSlots = listOf("0105", "015D", "010C", "010D")
+    private val defaultSlots = listOf("0105", "221017", "010C", "010D")
 
     private val slotsAndUnits: Flow<Pair<List<String>, DisplayUnits>> =
         gaugeSlots.combine(userPreferences.displayUnits) { slots, units -> slots to units }
@@ -136,6 +140,7 @@ class DashboardViewModel @Inject constructor(
             ssmFallback         = connected && ssmFallback,
             ambientTemp         = if (connected) sensorValues[ObdPids.AMBIENT_TEMP.cmd] else null,
             fuelConsumption     = computeFuelConsumption(sensorValues, units),
+            awdDuty             = if (connected) sensorValues[ObdPids.AWD_DUTY.cmd] else null,
         )
     }.stateIn(
         viewModelScope,
@@ -287,16 +292,35 @@ private fun pidToMetric(idx: Int, pid: ObdPid, rawVal: Float?, units: DisplayUni
         ObdPids.VOLTAGE.cmd      -> rawVal != null && rawVal < 11.8f
         else -> false
     }
+    val alertLevel = when (pid.cmd) {
+        ObdPids.COOLANT_TEMP.cmd -> when {
+            rawVal != null && rawVal >= 120f -> MetricAlertLevel.CRITICAL
+            rawVal != null && rawVal >= 100f -> MetricAlertLevel.WARNING
+            else                             -> MetricAlertLevel.NONE
+        }
+        ObdPids.OIL_TEMP.cmd -> when {
+            rawVal != null && rawVal >= 140f -> MetricAlertLevel.CRITICAL
+            rawVal != null && rawVal >= 127f -> MetricAlertLevel.WARNING
+            else                             -> MetricAlertLevel.NONE
+        }
+        ObdPids.CVT_TEMP.cmd -> when {
+            rawVal != null && rawVal >= 130f -> MetricAlertLevel.CRITICAL
+            rawVal != null && rawVal >= 110f -> MetricAlertLevel.WARNING
+            else                             -> MetricAlertLevel.NONE
+        }
+        else -> MetricAlertLevel.NONE
+    }
     val fraction = rawVal?.let { ((it - pid.minVal) / (pid.maxVal - pid.minVal)).coerceIn(0f, 1f) }
 
     return LiveMetric(
-        id        = "slot_$idx",
-        label     = pid.name,
-        value     = displayVal,
-        unit      = displayUnit,
-        iconRes   = pid.toMetricIcon(),
-        highlight = highlight,
-        fraction  = fraction,
+        id         = "slot_$idx",
+        label      = pid.name,
+        value      = displayVal,
+        unit       = displayUnit,
+        iconRes    = pid.toMetricIcon(),
+        highlight  = highlight,
+        fraction   = fraction,
+        alertLevel = alertLevel,
     )
 }
 
@@ -318,6 +342,7 @@ private fun ObdPid.toMetricIcon(): MetricIcon = when (cmd) {
     ObdPids.FUEL_LEVEL.cmd   -> MetricIcon.FUEL
     ObdPids.OIL_TEMP.cmd     -> MetricIcon.OIL
     ObdPids.CVT_TEMP.cmd     -> MetricIcon.CVT
+    ObdPids.AWD_DUTY.cmd     -> MetricIcon.AWD
     ObdPids.ENGINE_LOAD.cmd  -> MetricIcon.ENGINE_LOAD
     ObdPids.MAP.cmd          -> MetricIcon.MAP
     ObdPids.MAF.cmd          -> MetricIcon.MAF

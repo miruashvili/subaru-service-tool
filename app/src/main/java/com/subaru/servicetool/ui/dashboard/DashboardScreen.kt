@@ -19,6 +19,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -98,6 +100,13 @@ import com.subaru.servicetool.ui.theme.DarkError
 import com.subaru.servicetool.ui.theme.DarkPrimary
 import com.subaru.servicetool.ui.theme.DarkSuccess
 import com.subaru.servicetool.ui.theme.DarkWarning
+import com.subaru.servicetool.ui.theme.GaugeArcActive
+import com.subaru.servicetool.ui.theme.GaugeArcBg
+import com.subaru.servicetool.ui.theme.GaugeCardBg
+import com.subaru.servicetool.ui.theme.GaugeLabelColor
+import com.subaru.servicetool.ui.theme.GaugeTempCrit
+import com.subaru.servicetool.ui.theme.GaugeTempWarn
+import com.subaru.servicetool.ui.theme.GaugeUnitColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -153,6 +162,11 @@ fun DashboardScreen(
                     connectedName   = state.connectedDeviceName,
                 )
                 AlertBanner(alertLevel, onDismiss = viewModel::dismissAlert)
+                val awdDuty = state.awdDuty
+                if (state.connectionState == ObdConnectionState.CONNECTED &&
+                    state.vehicle?.cvtType != null && awdDuty != null) {
+                    AwdWidget(rearDuty = awdDuty)
+                }
                 Row(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -191,6 +205,11 @@ fun DashboardScreen(
                     connectedName   = state.connectedDeviceName,
                 )
                 AlertBanner(alertLevel, onDismiss = viewModel::dismissAlert)
+                val awdDuty = state.awdDuty
+                if (state.connectionState == ObdConnectionState.CONNECTED &&
+                    state.vehicle?.cvtType != null && awdDuty != null) {
+                    AwdWidget(rearDuty = awdDuty)
+                }
                 GaugeGrid(
                     metrics    = state.metrics,
                     onEditSlot = viewModel::openGaugeEditor,
@@ -516,9 +535,10 @@ private fun GaugeGrid(metrics: List<LiveMetric>, onEditSlot: (Int) -> Unit, modi
 @Composable
 private fun MetricCard(metric: LiveMetric, onEdit: () -> Unit, modifier: Modifier = Modifier) {
     val infiniteTransition = rememberInfiniteTransition(label = "card_${metric.id}")
+    val shouldFlash = metric.highlight || metric.alertLevel == MetricAlertLevel.CRITICAL
     val flashAlpha by infiniteTransition.animateFloat(
         initialValue = 1f,
-        targetValue  = if (metric.highlight) 0.3f else 1f,
+        targetValue  = if (shouldFlash) 0.3f else 1f,
         animationSpec = infiniteRepeatable(tween(600, easing = LinearEasing), RepeatMode.Reverse),
         label = "flash_${metric.id}",
     )
@@ -528,11 +548,22 @@ private fun MetricCard(metric: LiveMetric, onEdit: () -> Unit, modifier: Modifie
         label = "arc_${metric.id}",
     )
 
-    val accentColor = if (metric.highlight) DarkWarning else MaterialTheme.colorScheme.primary
-    val arcBg = MaterialTheme.colorScheme.onSurface.copy(0.08f)
+    val isDark = isSystemInDarkTheme()
+    val arcColor = when {
+        metric.alertLevel == MetricAlertLevel.CRITICAL -> GaugeTempCrit
+        metric.alertLevel == MetricAlertLevel.WARNING  -> GaugeTempWarn
+        metric.highlight                               -> DarkWarning
+        isDark                                         -> GaugeArcActive
+        else                                           -> MaterialTheme.colorScheme.primary
+    }
+    val arcBg        = if (isDark) GaugeArcBg else MaterialTheme.colorScheme.onSurface.copy(0.08f)
+    val cardBg       = if (isDark) GaugeCardBg else MaterialTheme.colorScheme.surface
+    val valueColor   = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
+    val unitColor    = if (isDark) GaugeUnitColor else MaterialTheme.colorScheme.onSurface.copy(0.5f)
+    val labelColor   = if (isDark) GaugeLabelColor else MaterialTheme.colorScheme.onSurface.copy(0.4f)
 
     Surface(
-        color = MaterialTheme.colorScheme.surface,
+        color = cardBg,
         shape = RoundedCornerShape(14.dp),
         tonalElevation = 2.dp,
         modifier = modifier.aspectRatio(1f).alpha(flashAlpha),
@@ -545,7 +576,7 @@ private fun MetricCard(metric: LiveMetric, onEdit: () -> Unit, modifier: Modifie
                 val sweepTotal = 240f
                 drawArc(color = arcBg, startAngle = startAngle, sweepAngle = sweepTotal, useCenter = false, style = stroke)
                 if (metric.fraction != null && animatedFraction > 0f) {
-                    drawArc(color = accentColor, startAngle = startAngle, sweepAngle = sweepTotal * animatedFraction, useCenter = false, style = stroke)
+                    drawArc(color = arcColor, startAngle = startAngle, sweepAngle = sweepTotal * animatedFraction, useCenter = false, style = stroke)
                 }
             }
             Column(
@@ -553,7 +584,7 @@ private fun MetricCard(metric: LiveMetric, onEdit: () -> Unit, modifier: Modifie
                 verticalArrangement = Arrangement.Center,
                 modifier = Modifier.padding(8.dp),
             ) {
-                Icon(imageVector = metricIcon(metric.iconRes), contentDescription = null, tint = accentColor, modifier = Modifier.size(28.dp))
+                Icon(imageVector = metricIcon(metric.iconRes), contentDescription = null, tint = arcColor, modifier = Modifier.size(28.dp))
                 Spacer(Modifier.height(2.dp))
                 AnimatedContent(
                     targetState = metric.value,
@@ -562,11 +593,11 @@ private fun MetricCard(metric: LiveMetric, onEdit: () -> Unit, modifier: Modifie
                 ) { v ->
                     Text(text = v,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 36.sp),
-                        color = accentColor, textAlign = TextAlign.Center)
+                        color = valueColor, textAlign = TextAlign.Center)
                 }
-                Text(metric.unit, style = MaterialTheme.typography.labelSmall.copy(fontSize = 14.sp), color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
+                Text(metric.unit, style = MaterialTheme.typography.labelSmall.copy(fontSize = 14.sp), color = unitColor)
                 Text(metric.label, style = MaterialTheme.typography.labelSmall.copy(fontSize = 13.sp),
-                    color = MaterialTheme.colorScheme.onSurface.copy(0.4f), textAlign = TextAlign.Center, maxLines = 1)
+                    color = labelColor, textAlign = TextAlign.Center, maxLines = 1)
             }
 
             // Edit pencil button
@@ -769,9 +800,99 @@ private fun metricIcon(icon: MetricIcon): ImageVector = when (icon) {
     MetricIcon.FUEL        -> Icons.Filled.LocalGasStation
     MetricIcon.OIL         -> Icons.Filled.WaterDrop
     MetricIcon.CVT         -> Icons.Filled.WaterDrop
+    MetricIcon.AWD         -> Icons.Filled.DirectionsCar
     MetricIcon.ENGINE_LOAD -> Icons.Filled.Speed
     MetricIcon.MAP         -> Icons.Filled.Compress
     MetricIcon.MAF         -> Icons.Filled.Air
+}
+
+// ── AWD torque distribution widget ───────────────────────────────────────────
+
+@Composable
+private fun AwdWidget(rearDuty: Float) {
+    val frontPct = (100f - rearDuty).coerceIn(0f, 100f)
+    val rearPct  = rearDuty.coerceIn(0f, 100f)
+    val animatedFrontFraction by animateFloatAsState(
+        targetValue   = frontPct / 100f,
+        animationSpec = tween(500, easing = FastOutSlowInEasing),
+        label         = "awd_front",
+    )
+
+    val lang = java.util.Locale.getDefault().language
+    val title = when (lang) {
+        "ka" -> "AWD გადანაწილება"
+        "ru" -> "Распределение AWD"
+        "es" -> "Distribución AWD"
+        "fr" -> "Répartition AWD"
+        "de" -> "AWD-Verteilung"
+        else -> "AWD Torque Distribution"
+    }
+    val frontLabel = when (lang) {
+        "ka" -> "წინა"; "ru" -> "ПЕРЕД"; "es" -> "DELAN."
+        "fr" -> "AVANT"; "de" -> "VORNE"; else -> "FRONT"
+    }
+    val rearLabel = when (lang) {
+        "ka" -> "უკანა"; "ru" -> "ЗАД"; "es" -> "TRAS."
+        "fr" -> "ARR."; "de" -> "HINTEN"; else -> "REAR"
+    }
+
+    Surface(
+        color = MaterialTheme.colorScheme.surface,
+        shape = RoundedCornerShape(14.dp),
+        tonalElevation = 2.dp,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Filled.DirectionsCar, contentDescription = null,
+                    tint = GaugeArcActive, modifier = Modifier.size(15.dp),
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                    title,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurface.copy(0.65f),
+                )
+            }
+            Spacer(Modifier.height(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(48.dp)) {
+                    Text(
+                        "${frontPct.toInt()}%",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = GaugeArcActive,
+                    )
+                    Text(frontLabel, style = MaterialTheme.typography.labelSmall, color = GaugeLabelColor)
+                }
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(14.dp)
+                        .clip(RoundedCornerShape(7.dp)),
+                ) {
+                    Box(modifier = Modifier.fillMaxSize().background(GaugeArcBg))
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .fillMaxWidth(animatedFrontFraction)
+                            .background(Brush.horizontalGradient(listOf(GaugeArcActive, DarkPrimary))),
+                    )
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(48.dp)) {
+                    Text(
+                        "${rearPct.toInt()}%",
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = DarkWarning,
+                    )
+                    Text(rearLabel, style = MaterialTheme.typography.labelSmall, color = GaugeLabelColor)
+                }
+            }
+        }
+    }
 }
 
 private val Market.badgeColor: androidx.compose.ui.graphics.Color

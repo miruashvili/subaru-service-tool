@@ -34,6 +34,28 @@ object ObdParser {
     }
 
     /**
+     * Parses a UDS Mode-22 response where the DID may be longer than 2 hex chars.
+     * Works for any cmd of the form "22XXYY..." (mode=22, DID = remaining hex pairs).
+     * E.g. "221017" → looks for "62 10 17 <data>", returns data bytes.
+     *      "22A800000113" → looks for "62 A8 00 00 01 13 <data>".
+     */
+    fun parseUdsResponse(response: String, cmd: String): List<Int>? {
+        if (cmd.length < 6) return null
+        val mode = cmd.substring(0, 2).toIntOrNull(16) ?: return null
+        val replyByte = (0x40 + mode).toString(16).uppercase().padStart(2, '0')
+        val didTokens = cmd.substring(2).chunked(2).map { it.uppercase() }
+        val tokens = tokenize(response) ?: return null
+        outer@ for (i in 0..tokens.size - didTokens.size - 1) {
+            if (tokens[i] != replyByte) continue
+            for (j in didTokens.indices) {
+                if (tokens.getOrNull(i + 1 + j) != didTokens[j]) continue@outer
+            }
+            return tokens.drop(i + 1 + didTokens.size).mapNotNull { it.toIntOrNull(16) }
+        }
+        return null
+    }
+
+    /**
      * Parses a battery voltage response from ATRV (e.g. "14.2V >").
      */
     fun parseVoltage(response: String): Float? =

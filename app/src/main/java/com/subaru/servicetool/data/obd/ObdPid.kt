@@ -15,5 +15,6 @@ data class ObdPid(
     val minVal: Float = 0f,
     val maxVal: Float = 100f,
     val group: PidGroup = PidGroup.MISC,
+    val header: String? = null,   // non-null → switch ATSH before query, restore 7E0 after
     val parse: (List<Int>) -> Float?,
 )

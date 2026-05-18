@@ -30,14 +30,23 @@ object ObdPids {
     ) { b -> if (b.isNotEmpty()) (b[0] - 40).toFloat() else null }
 
     val OIL_TEMP = ObdPid(
-        cmd = "015C", name = "Engine Oil Temp", unit = "°C",
+        cmd = "22A800000113", name = "Engine Oil Temp", unit = "°C",
         minVal = -40f, maxVal = 215f, group = PidGroup.TEMPERATURE,
     ) { b -> if (b.isNotEmpty()) (b[0] - 40).toFloat() else null }
 
+    // CVT temp lives on the TCU (address 7E1), not the ECU — requires header switch
     val CVT_TEMP = ObdPid(
-        cmd = "015D", name = "CVT Fluid Temp", unit = "°C",
+        cmd = "221017", name = "CVT Fluid Temp", unit = "°C",
         minVal = -40f, maxVal = 215f, group = PidGroup.TEMPERATURE,
+        header = "7E1",
     ) { b -> if (b.isNotEmpty()) (b[0] - 40).toFloat() else null }
+
+    // AWD transfer duty ratio — also on TCU (7E1); byte value = rear torque %
+    val AWD_DUTY = ObdPid(
+        cmd = "221018", name = "AWD Transfer Duty", unit = "%",
+        minVal = 0f, maxVal = 100f, group = PidGroup.MISC,
+        header = "7E1",
+    ) { b -> if (b.isNotEmpty()) b[0].toFloat() else null }
 
     // ATRV is an ELM327 AT command, not a standard PID; parsed via ObdParser.parseVoltage
     val VOLTAGE = ObdPid(
@@ -128,13 +137,13 @@ object ObdPids {
         ENGINE_LOAD, MAP, MAF,
         FUEL_LEVEL, FUEL_TRIM_ST, FUEL_TRIM_LT,
         REL_THROTTLE, ABS_LOAD, RUN_TIME,
-        OIL_TEMP, CVT_TEMP, AMBIENT_TEMP,
+        OIL_TEMP, CVT_TEMP, AWD_DUTY, AMBIENT_TEMP,
     )
 
     val TPMS = listOf(TPMS_FL, TPMS_FR, TPMS_RL, TPMS_RR)
 
     val ALL: List<ObdPid> = DASHBOARD + EXTENDED + TPMS
 
-    // PIDs available for gauge configuration (excludes ATRV and TPMS)
-    val CONFIGURABLE: List<ObdPid> = (DASHBOARD.filter { it.cmd != "ATRV" } + EXTENDED).distinctBy { it.cmd }
+    // PIDs available for gauge configuration (excludes ATRV, TPMS, and AWD_DUTY which has its own widget)
+    val CONFIGURABLE: List<ObdPid> = (DASHBOARD.filter { it.cmd != "ATRV" } + EXTENDED.filter { it != AWD_DUTY }).distinctBy { it.cmd }
 }

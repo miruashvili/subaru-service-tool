@@ -112,11 +112,20 @@ class ObdQueryEngine @Inject constructor(
     // ── Query helpers ─────────────────────────────────────────────────────────
 
     private suspend fun queryPid(pid: ObdPid): Float? {
-        val response = btManager.sendCommand(pid.cmd) ?: return null
-        return if (pid.cmd == "ATRV") {
-            ObdParser.parseVoltage(response)
-        } else {
-            ObdParser.parseStandard(response, pid.cmd)?.let { pid.parse(it) }
+        if (pid.header != null) {
+            btManager.sendCommand("ATSH${pid.header}")
+            delay(50)
+        }
+        val response = btManager.sendCommand(pid.cmd)
+        if (pid.header != null) {
+            btManager.sendCommand("ATSH7E0")
+            delay(50)
+        }
+        response ?: return null
+        return when {
+            pid.cmd == "ATRV"        -> ObdParser.parseVoltage(response)
+            pid.cmd.startsWith("22") -> ObdParser.parseUdsResponse(response, pid.cmd)?.let { pid.parse(it) }
+            else                     -> ObdParser.parseStandard(response, pid.cmd)?.let { pid.parse(it) }
         }
     }
 

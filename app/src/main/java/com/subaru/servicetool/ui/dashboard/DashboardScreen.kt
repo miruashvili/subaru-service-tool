@@ -111,6 +111,7 @@ import com.subaru.servicetool.ui.theme.GaugeTempWarn
 fun DashboardScreen(
     paddingValues: PaddingValues = PaddingValues(),
     onNavigateToBluetooth: () -> Unit = {},
+    onNavigateToSportGauge: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val state              by viewModel.uiState.collectAsState()
@@ -350,9 +351,10 @@ fun DashboardScreen(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 DashboardTopBar(
-                    connectionState = state.connectionState,
-                    ambientTemp     = state.ambientTemp,
-                    connectedName   = state.connectedDeviceName,
+                    connectionState    = state.connectionState,
+                    ambientTemp        = state.ambientTemp,
+                    connectedName      = state.connectedDeviceName,
+                    onNavigateToSport  = onNavigateToSportGauge,
                 )
                 AlertBanner(alertLevel, onDismiss = viewModel::dismissAlert)
                 GaugeGrid(
@@ -419,6 +421,7 @@ private fun DashboardTopBar(
     ambientTemp: Float?,
     connectedName: String?,
     dtcCount: Int = 0,
+    onNavigateToSport: () -> Unit = {},
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -477,6 +480,14 @@ private fun DashboardTopBar(
             }
             Spacer(Modifier.width(8.dp))
         }
+
+        // Sport gauge button
+        IconButton(onClick = onNavigateToSport, modifier = Modifier.size(32.dp)) {
+            Icon(Icons.Filled.Speed, contentDescription = "Sport Gauge",
+                tint = MaterialTheme.colorScheme.onSurface.copy(0.45f),
+                modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(4.dp))
 
         // Connection status dot
         val dotColor = when (connectionState) {

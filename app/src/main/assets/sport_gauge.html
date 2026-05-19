@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no"/>
+<title>Sport Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+html,body{width:100%;height:100%;background:#07070b;overflow:hidden;}
+canvas{position:absolute;top:0;left:0;display:block;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script>
+/* ── Canvas context ─────────────────────────────────────────────────── */
+const canvas = document.getElementById('c');
+const ctx    = canvas.getContext('2d');
+
+/* ── Live sensor state ──────────────────────────────────────────────── */
+const S = {
+  oil:0, cool:70, cvt:0, boost:0,
+  iat:20, bat:12.0, afr:0,
+  rpm:0, speed:0, load:0, ltrim:0,
+  throttle:0, awd:0
+};
+
+/* ── Sensor metadata ────────────────────────────────────────────────── */
+const META = {
+  oil:     {label:'OIL TEMP',   unit:'°C',  min:0,   max:150, warn:110,  crit:130,  invert:false, sym:false},
+  cool:    {label:'COOLANT',    unit:'°C',  min:40,  max:125, warn:100,  crit:110,  invert:false, sym:false},
+  cvt:     {label:'CVT TEMP',   unit:'°C',  min:0,   max:120, warn:100,  crit:115,  invert:false, sym:false},
+  boost:   {label:'MAP',        unit:'kPa',      min:0,   max:255, warn:180,  crit:230,  invert:false, sym:false},
+  iat:     {label:'INT AIR',    unit:'°C',  min:-10, max:60,  warn:45,   crit:55,   invert:false, sym:false},
+  bat:     {label:'BATTERY',    unit:'V',        min:10,  max:16,  warn:13.0, crit:11.5, invert:true,  sym:false},
+  afr:     {label:'F-TRIM ST',  unit:'%',        min:-25, max:25,  warn:10,   crit:15,   invert:false, sym:true},
+  rpm:     {label:'ENG RPM',    unit:'rpm',      min:0,   max:8000,warn:6500, crit:7000, invert:false, sym:false},
+  speed:   {label:'SPEED',      unit:'km/h',     min:0,   max:240, warn:180,  crit:220,  invert:false, sym:false},
+  load:    {label:'ENG LOAD',   unit:'%',        min:0,   max:100, warn:85,   crit:95,   invert:false, sym:false},
+  ltrim:   {label:'LT TRIM',    unit:'%',        min:-25, max:25,  warn:10,   crit:15,   invert:false, sym:true},
+  throttle:{label:'THROTTLE',   unit:'%',        min:0,   max:100, warn:90,   crit:95,   invert:false, sym:false},
+  awd:     {label:'AWD DUTY',   unit:'%',        min:0,   max:100, warn:90,   crit:95,   invert:false, sym:false}
+};
+
+/* ── Slot configuration ─────────────────────────────────────────────── */
+let SLOT = {
+  gauge1:'oil', gauge2:'cool', gauge3:'cvt',
+  small1:'load', small2:'iat', small3:'bat', small4:'boost', small5:'afr'
+};
+
+let liveMode = false;
+let animId   = null;
+
+/* ── Demo targets ───────────────────────────────────────────────────── */
+const Tgt = {
+  oil:90, cool:87, cvt:72, boost:145, iat:28,
+  bat:14.2, afr:2.3, rpm:2800, speed:0,
+  load:55, ltrim:-1, throttle:20, awd:0
+};
+
+/* ── Canvas roundRect polyfill ─────────────────────────────────────── */
+function rr(x,y,w,h,r){
+  if(w<2*r)r=w/2; if(h<2*r)r=h/2;
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,  x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,  y+h,r);
+  ctx.arcTo(x,  y+h,x,  y,  r);
+  ctx.arcTo(x,  y,  x+w,y,  r);
+  ctx.closePath();
+}
+
+/* ── Color helper ───────────────────────────────────────────────────── */
+function getColor(key,val){
+  const m=META[key]; if(!m) return '#4af8ff';
+  if(m.sym){ const a=Math.abs(val); return a>=m.crit?'#ef4444':a>=m.warn?'#f97316':'#22c55e'; }
+  if(m.invert){ return val<=m.crit?'#ef4444':val<=m.warn?'#f97316':'#22c55e'; }
+  return val>=m.crit?'#ef4444':val>=m.warn?'#f97316':'#22c55e';
+}
+
+/* ── Format helper ──────────────────────────────────────────────────── */
+function fmt(key,val){
+  if(key==='bat') return val.toFixed(1);
+  if(key==='afr'||key==='ltrim') return (val>=0?'+':'')+val.toFixed(1);
+  return Math.round(val).toString();
+}
+
+/* ── Circular arc gauge ─────────────────────────────────────────────── */
+function drawGauge(cx,cy,r,key){
+  const m=META[key]||META.oil;
+  const raw=S[key]??0;
+  const val=Math.max(m.min,Math.min(m.max,raw));
+  const frac=(val-m.min)/(m.max-m.min);
+  const color=getColor(key,val);
+
+  const SA=0.75*Math.PI;   // start at lower-left (135°)
+  const SW=1.5*Math.PI;    // 270° clockwise sweep
+
+  /* arc track */
+  ctx.beginPath();
+  ctx.arc(cx,cy,r,SA,SA+SW,false);
+  ctx.strokeStyle='rgba(255,255,255,0.07)';
+  ctx.lineWidth=r*0.14;
+  ctx.lineCap='round';
+  ctx.stroke();
+
+  /* colored fill */
+  if(frac>0.005){
+    ctx.save();
+    ctx.shadowBlur=r*0.38;
+    ctx.shadowColor=color;
+    ctx.beginPath();
+    ctx.arc(cx,cy,r,SA,SA+SW*frac,false);
+    ctx.strokeStyle=color;
+    ctx.lineWidth=r*0.14;
+    ctx.lineCap='round';
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /* inner ring */
+  ctx.beginPath();
+  ctx.arc(cx,cy,r*0.70,0,2*Math.PI,false);
+  ctx.strokeStyle='rgba(255,255,255,0.04)';
+  ctx.lineWidth=1;
+  ctx.stroke();
+
+  /* tick marks */
+  ctx.lineCap='butt';
+  for(let i=0;i<=9;i++){
+    const a=SA+SW/9*i, big=i%3===0;
+    const ir=r*(big?0.63:0.73), or=r*0.87;
+    ctx.beginPath();
+    ctx.moveTo(cx+Math.cos(a)*ir, cy+Math.sin(a)*ir);
+    ctx.lineTo(cx+Math.cos(a)*or, cy+Math.sin(a)*or);
+    ctx.strokeStyle=`rgba(255,255,255,${big?0.35:0.12})`;
+    ctx.lineWidth=big?1.5:0.8;
+    ctx.stroke();
+  }
+
+  /* value */
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.shadowBlur=0;
+  ctx.font=`bold ${Math.round(r*0.50)}px 'Courier New',monospace`;
+  ctx.fillStyle='#ffffff';
+  ctx.fillText(fmt(key,val), cx, cy-r*0.04);
+
+  /* unit */
+  ctx.font=`${Math.round(r*0.21)}px 'Courier New',monospace`;
+  ctx.fillStyle='rgba(255,255,255,0.42)';
+  ctx.fillText(m.unit, cx, cy+r*0.32);
+
+  /* label */
+  ctx.font=`bold ${Math.round(r*0.17)}px 'Courier New',monospace`;
+  ctx.fillStyle='rgba(255,255,255,0.52)';
+  ctx.fillText(m.label, cx, cy+r*0.60);
+}
+
+/* ── Vertical bar gauge ─────────────────────────────────────────────── */
+function drawBar(bx,by,bw,bh,key){
+  const m=META[key]||META.load;
+  const raw=S[key]??0;
+  const val=Math.max(m.min,Math.min(m.max,raw));
+  const frac=Math.max(0,(val-m.min)/(m.max-m.min));
+  const color=getColor(key,val);
+
+  const px=bw*0.18;
+  const tx=bx+px, tw=bw-px*2;
+  const valH=bh*0.22, lblH=bh*0.17;
+  const barH=bh-valH-lblH-8;
+  const ty=by+4;
+
+  /* bar background */
+  ctx.fillStyle='rgba(255,255,255,0.04)';
+  rr(tx,ty,tw,barH,3); ctx.fill();
+
+  /* fill */
+  const fh=barH*frac;
+  if(fh>1){
+    ctx.save();
+    ctx.shadowBlur=10; ctx.shadowColor=color;
+    ctx.fillStyle=color;
+    rr(tx,ty+barH-fh,tw,fh,3); ctx.fill();
+    ctx.restore();
+  }
+
+  /* warn dashed line */
+  const wf=m.sym?0.5+(m.warn/(m.max-m.min)):
+            m.invert?(m.warn-m.min)/(m.max-m.min):
+            (m.warn-m.min)/(m.max-m.min);
+  const warnY=ty+barH*(1-Math.max(0,Math.min(1,wf)));
+  ctx.strokeStyle='rgba(251,191,36,0.32)';
+  ctx.lineWidth=1; ctx.setLineDash([3,3]);
+  ctx.beginPath(); ctx.moveTo(tx,warnY); ctx.lineTo(tx+tw,warnY); ctx.stroke();
+  ctx.setLineDash([]);
+
+  /* value */
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.shadowBlur=6; ctx.shadowColor=color;
+  ctx.fillStyle=color;
+  ctx.font=`bold ${Math.round(bh*0.15)}px 'Courier New',monospace`;
+  ctx.fillText(fmt(key,val), bx+bw/2, ty+barH+valH*0.45);
+  ctx.shadowBlur=0;
+
+  /* label */
+  ctx.fillStyle='rgba(255,255,255,0.38)';
+  ctx.font=`${Math.round(bh*0.12)}px 'Courier New',monospace`;
+  ctx.fillText(m.label, bx+bw/2, ty+barH+valH+lblH*0.45);
+}
+
+/* ── Main render ────────────────────────────────────────────────────── */
+function render(){
+  const W=canvas.width, H=canvas.height;
+  ctx.clearRect(0,0,W,H);
+  ctx.fillStyle='#07070b'; ctx.fillRect(0,0,W,H);
+
+  const topH=H*0.62;
+  const botH=H-topH;
+  const gW=W/3;
+
+  /* circular gauges */
+  const gKeys=[SLOT.gauge1,SLOT.gauge2,SLOT.gauge3];
+  for(let i=0;i<3;i++){
+    const cx=(i+0.5)*gW;
+    const cy=topH*0.50;
+    const r=Math.min(gW*0.37,topH*0.40);
+    drawGauge(cx,cy,r,gKeys[i]);
+  }
+
+  /* gauge-column dividers */
+  ctx.strokeStyle='rgba(255,255,255,0.04)';
+  ctx.lineWidth=1;
+  for(let i=1;i<3;i++){
+    ctx.beginPath(); ctx.moveTo(i*gW,8); ctx.lineTo(i*gW,topH-8); ctx.stroke();
+  }
+
+  /* separator line */
+  ctx.strokeStyle='rgba(255,255,255,0.07)';
+  ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,topH); ctx.lineTo(W,topH); ctx.stroke();
+
+  /* bar gauges */
+  const sKeys=[SLOT.small1,SLOT.small2,SLOT.small3,SLOT.small4,SLOT.small5];
+  const bW=W/5;
+  for(let i=0;i<5;i++) drawBar(i*bW,topH,bW,botH,sKeys[i]);
+
+  /* bar dividers */
+  ctx.strokeStyle='rgba(255,255,255,0.04)';
+  for(let i=1;i<5;i++){
+    ctx.beginPath(); ctx.moveTo(i*bW,topH+4); ctx.lineTo(i*bW,H-4); ctx.stroke();
+  }
+}
+
+/* ── Demo animation ─────────────────────────────────────────────────── */
+function tick(){
+  if(liveMode){ animId=null; return; }
+  for(const k in S) S[k]=+(S[k]+(Tgt[k]-S[k])*0.04).toFixed(3);
+  if(Math.random()<0.004){
+    Tgt.oil=70+Math.random()*55;  Tgt.cool=78+Math.random()*30;
+    Tgt.cvt=50+Math.random()*55;  Tgt.boost=Math.random()*220;
+    Tgt.iat=15+Math.random()*35;  Tgt.bat=13.5+Math.random()*1.5;
+    Tgt.afr=-8+Math.random()*16;  Tgt.load=Math.random()*85;
+    Tgt.rpm=800+Math.random()*5000;
+  }
+  render();
+  animId=requestAnimationFrame(tick);
+}
+
+function startDemo(){
+  if(animId) return;
+  liveMode=false;
+  animId=requestAnimationFrame(tick);
+}
+
+/* ── Native bridge ──────────────────────────────────────────────────── */
+function updateFromNative(data){
+  liveMode=true;
+  if(animId){ cancelAnimationFrame(animId); animId=null; }
+  for(const k in data){ if(k in S) S[k]=data[k]; }
+  render();
+}
+
+function setSlotConfig(cfg){
+  if(cfg.gauge1) SLOT.gauge1=cfg.gauge1;
+  if(cfg.gauge2) SLOT.gauge2=cfg.gauge2;
+  if(cfg.gauge3) SLOT.gauge3=cfg.gauge3;
+  if(cfg.small1) SLOT.small1=cfg.small1;
+  if(cfg.small2) SLOT.small2=cfg.small2;
+  if(cfg.small3) SLOT.small3=cfg.small3;
+  if(cfg.small4) SLOT.small4=cfg.small4;
+  if(cfg.small5) SLOT.small5=cfg.small5;
+  render();
+}
+
+/* ── Init ───────────────────────────────────────────────────────────── */
+function resize(){
+  canvas.width=window.innerWidth;
+  canvas.height=window.innerHeight;
+  render();
+}
+window.addEventListener('resize',resize);
+resize();
+startDemo();
+</script>
+</body>
+</html>

@@ -74,6 +74,7 @@ import com.subaru.servicetool.ui.bluetooth.BluetoothSettingsScreen
 import com.subaru.servicetool.ui.main.MainViewModel
 import com.subaru.servicetool.ui.onboarding.OnboardingScreen
 import com.subaru.servicetool.ui.dashboard.DashboardScreen
+import com.subaru.servicetool.ui.dashboard.SportGaugeScreen
 import com.subaru.servicetool.ui.screens.SensorsScreen
 import com.subaru.servicetool.ui.screens.ServiceScreen
 import com.subaru.servicetool.ui.screens.SettingsScreen
@@ -336,8 +337,9 @@ private fun androidx.navigation.NavGraphBuilder.landscapeComposables(
 ) {
     composable(Screen.Dashboard.route, enterTransition = { tabEnter }, exitTransition = { tabExit }) {
         DashboardScreen(
-            paddingValues         = androidx.compose.foundation.layout.PaddingValues(),
-            onNavigateToBluetooth = { navController.navigate("bluetooth_settings") },
+            paddingValues          = androidx.compose.foundation.layout.PaddingValues(),
+            onNavigateToBluetooth  = { navController.navigate("bluetooth_settings") },
+            onNavigateToSportGauge = { navController.navigate("sport_gauge") },
         )
     }
     composable(Screen.Sensors.route,  enterTransition = { tabEnter }, exitTransition = { tabExit }) {
@@ -362,8 +364,9 @@ private fun androidx.navigation.NavGraphBuilder.portraitComposables(
 ) {
     composable(Screen.Dashboard.route, enterTransition = { tabEnter }, exitTransition = { tabExit }) {
         DashboardScreen(
-            paddingValues         = innerPadding,
-            onNavigateToBluetooth = { navController.navigate("bluetooth_settings") },
+            paddingValues          = innerPadding,
+            onNavigateToBluetooth  = { navController.navigate("bluetooth_settings") },
+            onNavigateToSportGauge = { navController.navigate("sport_gauge") },
         )
     }
     composable(Screen.Sensors.route,  enterTransition = { tabEnter }, exitTransition = { tabExit }) {
@@ -405,5 +408,14 @@ private fun androidx.navigation.NavGraphBuilder.subScreenComposables(
         popExitTransition  = { slidePopExit },
     ) {
         BluetoothSettingsScreen(onBack = { navController.popBackStack() })
+    }
+    composable(
+        "sport_gauge",
+        enterTransition    = { fadeIn(tween(250)) },
+        exitTransition     = { fadeOut(tween(200)) },
+        popEnterTransition = { fadeIn(tween(250)) },
+        popExitTransition  = { fadeOut(tween(200)) },
+    ) {
+        SportGaugeScreen(onBack = { navController.popBackStack() })
     }
 }

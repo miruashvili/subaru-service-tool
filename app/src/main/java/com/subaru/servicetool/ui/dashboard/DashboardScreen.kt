@@ -19,7 +19,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -83,7 +82,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -105,13 +103,8 @@ import com.subaru.servicetool.ui.theme.DarkError
 import com.subaru.servicetool.ui.theme.DarkPrimary
 import com.subaru.servicetool.ui.theme.DarkSuccess
 import com.subaru.servicetool.ui.theme.DarkWarning
-import com.subaru.servicetool.ui.theme.GaugeArcActive
-import com.subaru.servicetool.ui.theme.GaugeArcBg
-import com.subaru.servicetool.ui.theme.GaugeCardBg
-import com.subaru.servicetool.ui.theme.GaugeLabelColor
 import com.subaru.servicetool.ui.theme.GaugeTempCrit
 import com.subaru.servicetool.ui.theme.GaugeTempWarn
-import com.subaru.servicetool.ui.theme.GaugeUnitColor
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -585,19 +578,17 @@ private fun MetricCard(
         label = "arc_${metric.id}",
     )
 
-    val isDark    = isSystemInDarkTheme()
     val arcColor  = when {
         metric.alertLevel == MetricAlertLevel.CRITICAL -> GaugeTempCrit
         metric.alertLevel == MetricAlertLevel.WARNING  -> GaugeTempWarn
         metric.highlight                               -> DarkWarning
-        isDark                                         -> GaugeArcActive
         else                                           -> MaterialTheme.colorScheme.primary
     }
-    val arcBg      = if (isDark) GaugeArcBg else MaterialTheme.colorScheme.onSurface.copy(0.08f)
-    val cardBg     = if (isDark) GaugeCardBg else MaterialTheme.colorScheme.surface
-    val valueColor = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
-    val unitColor  = if (isDark) GaugeUnitColor else MaterialTheme.colorScheme.onSurface.copy(0.5f)
-    val labelColor = if (isDark) GaugeLabelColor else MaterialTheme.colorScheme.onSurface.copy(0.4f)
+    val arcBg      = MaterialTheme.colorScheme.onSurface.copy(0.1f)
+    val cardBg     = MaterialTheme.colorScheme.surface
+    val valueColor = MaterialTheme.colorScheme.onSurface
+    val unitColor  = MaterialTheme.colorScheme.onSurface.copy(0.5f)
+    val labelColor = MaterialTheme.colorScheme.onSurface.copy(0.4f)
 
     val surfaceMod = if (useAspectRatio) modifier.aspectRatio(1f).alpha(flashAlpha)
                      else modifier.alpha(flashAlpha)
@@ -674,8 +665,7 @@ private fun WideGaugeCard(
     displayUnits: DisplayUnits,
     modifier: Modifier = Modifier,
 ) {
-    val isDark  = isSystemInDarkTheme()
-    val cardBg  = if (isDark) GaugeCardBg else MaterialTheme.colorScheme.surface
+    val cardBg  = MaterialTheme.colorScheme.surface
 
     Surface(
         color          = cardBg,
@@ -708,17 +698,15 @@ private fun WideGaugeCard(
 
 @Composable
 private fun WideMetricContent(metric: LiveMetric) {
-    val isDark     = isSystemInDarkTheme()
     val arcColor   = when {
         metric.alertLevel == MetricAlertLevel.CRITICAL -> GaugeTempCrit
         metric.alertLevel == MetricAlertLevel.WARNING  -> GaugeTempWarn
         metric.highlight                               -> DarkWarning
-        isDark                                         -> GaugeArcActive
         else                                           -> MaterialTheme.colorScheme.primary
     }
-    val valueColor = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
-    val unitColor  = if (isDark) GaugeUnitColor else MaterialTheme.colorScheme.onSurface.copy(0.5f)
-    val labelColor = if (isDark) GaugeLabelColor else MaterialTheme.colorScheme.onSurface.copy(0.4f)
+    val valueColor = MaterialTheme.colorScheme.onSurface
+    val unitColor  = MaterialTheme.colorScheme.onSurface.copy(0.5f)
+    val labelColor = MaterialTheme.colorScheme.onSurface.copy(0.4f)
 
     Row(
         modifier = Modifier
@@ -771,13 +759,12 @@ private fun TpmsContent(data: TpmsData, units: DisplayUnits) {
 
 @Composable
 private fun TireCell(pos: String, value: String, unit: String) {
-    val isDark = isSystemInDarkTheme()
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(value,
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-            color = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface)
-        Text(unit, style = MaterialTheme.typography.labelSmall, color = GaugeUnitColor)
-        Text(pos, style = MaterialTheme.typography.labelSmall, color = GaugeLabelColor)
+            color = MaterialTheme.colorScheme.onSurface)
+        Text(unit, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
+        Text(pos, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(0.4f))
     }
 }
 
@@ -791,8 +778,7 @@ private fun LandscapeMidBar(
     onEdit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val isDark = isSystemInDarkTheme()
-    val cardBg = if (isDark) GaugeCardBg else MaterialTheme.colorScheme.surface
+    val cardBg = MaterialTheme.colorScheme.surface
 
     Surface(
         color = cardBg,
@@ -817,15 +803,13 @@ private fun LandscapeMidBar(
 
 @Composable
 private fun WideSensorBarContent(metric: LiveMetric) {
-    val isDark     = isSystemInDarkTheme()
     val arcColor   = when {
         metric.alertLevel == MetricAlertLevel.CRITICAL -> GaugeTempCrit
         metric.alertLevel == MetricAlertLevel.WARNING  -> GaugeTempWarn
         metric.highlight                               -> DarkWarning
-        isDark                                         -> GaugeArcActive
         else                                           -> MaterialTheme.colorScheme.primary
     }
-    val valueColor = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
+    val valueColor = MaterialTheme.colorScheme.onSurface
 
     Row(
         modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 6.dp),
@@ -835,7 +819,7 @@ private fun WideSensorBarContent(metric: LiveMetric) {
             tint = arcColor, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))
         Text(metric.label, style = MaterialTheme.typography.labelSmall,
-            color = GaugeLabelColor, modifier = Modifier.weight(1f), maxLines = 1)
+            color = MaterialTheme.colorScheme.onSurface.copy(0.4f), modifier = Modifier.weight(1f), maxLines = 1)
         Text(metric.value,
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
             color = valueColor)
@@ -847,8 +831,7 @@ private fun WideSensorBarContent(metric: LiveMetric) {
 
 @Composable
 private fun FuelMidContent(fuel: FuelConsumptionState) {
-    val isDark     = isSystemInDarkTheme()
-    val valueColor = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
+    val valueColor = MaterialTheme.colorScheme.onSurface
     val instant = fuel.instantMpg?.let { "%.1f mpg".format(it) }
         ?: fuel.instantKml?.let { "%.1f km/L".format(it) }
         ?: fuel.instantL100?.let { "%.1f".format(it) }
@@ -860,10 +843,10 @@ private fun FuelMidContent(fuel: FuelConsumptionState) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(Icons.Filled.LocalGasStation, contentDescription = null,
-            tint = GaugeArcActive, modifier = Modifier.size(20.dp))
+            tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(8.dp))
         Text("Fuel", style = MaterialTheme.typography.labelSmall,
-            color = GaugeLabelColor, modifier = Modifier.weight(1f))
+            color = MaterialTheme.colorScheme.onSurface.copy(0.4f), modifier = Modifier.weight(1f))
         Text(instant,
             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
             color = valueColor)
@@ -885,8 +868,7 @@ private fun LandscapeBotWideCard(
     onEdit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val isDark = isSystemInDarkTheme()
-    val cardBg = if (isDark) GaugeCardBg else MaterialTheme.colorScheme.surface
+    val cardBg = MaterialTheme.colorScheme.surface
 
     Surface(
         color = cardBg,
@@ -1136,7 +1118,7 @@ private fun AwdContent(rearDuty: Float, compact: Boolean = false) {
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = if (compact) 6.dp else 10.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Filled.DirectionsCar, contentDescription = null,
-                tint = GaugeArcActive, modifier = Modifier.size(15.dp))
+                tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(15.dp))
             Spacer(Modifier.width(6.dp))
             Text(
                 title,
@@ -1152,21 +1134,21 @@ private fun AwdContent(rearDuty: Float, compact: Boolean = false) {
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(48.dp)) {
                 Text("${frontPct.toInt()}%",
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = GaugeArcActive)
-                Text(frontLabel, style = MaterialTheme.typography.labelSmall, color = GaugeLabelColor)
+                    color = MaterialTheme.colorScheme.primary)
+                Text(frontLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(0.4f))
             }
             Box(modifier = Modifier.weight(1f).height(14.dp).clip(RoundedCornerShape(7.dp))) {
-                Box(modifier = Modifier.fillMaxSize().background(GaugeArcBg))
+                Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.onSurface.copy(0.1f)))
                 Box(modifier = Modifier
                     .fillMaxHeight()
                     .fillMaxWidth(animatedFrontFraction)
-                    .background(Brush.horizontalGradient(listOf(GaugeArcActive, DarkPrimary))))
+                    .background(MaterialTheme.colorScheme.primary))
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(48.dp)) {
                 Text("${rearPct.toInt()}%",
                     style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
                     color = DarkWarning)
-                Text(rearLabel, style = MaterialTheme.typography.labelSmall, color = GaugeLabelColor)
+                Text(rearLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(0.4f))
             }
         }
     }

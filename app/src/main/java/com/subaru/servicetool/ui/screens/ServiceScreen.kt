@@ -198,55 +198,7 @@ fun ServiceScreen(
             )
         }
 
-        // ── Card 2: Engine Adaptation Reset ───────────────────────────────
-        item {
-            ProcedureCard(
-                title        = "Engine Adaptation Reset",
-                description  = "Clears ECU adaptive fuel trims. Required after engine work, injector replacement, or rough idle.",
-                icon         = Icons.Filled.Settings,
-                buttonLabel  = "Run Reset",
-                buttonColor  = DarkPrimary,
-                isActive     = activeProc == ActiveProcedure.ENGINE_ADAPT,
-                procState    = if (activeProc == ActiveProcedure.ENGINE_ADAPT || procState is ProcedureState.Success) procState else ProcedureState.Idle,
-                onStart      = viewModel::startEngineAdaptationReset,
-                onDismiss    = viewModel::resetProcedure,
-            )
-        }
-
-        // ── Card 3: Throttle Body Relearn ─────────────────────────────────
-        item {
-            ProcedureCard(
-                title        = "Throttle Body Relearn",
-                description  = "Resets throttle position baseline. Required after cleaning throttle body or replacing the unit.",
-                icon         = Icons.Filled.Speed,
-                buttonLabel  = "Run Relearn",
-                buttonColor  = DarkPrimary,
-                isActive     = activeProc == ActiveProcedure.THROTTLE_RELEARN,
-                procState    = if (activeProc == ActiveProcedure.THROTTLE_RELEARN || procState is ProcedureState.Success) procState else ProcedureState.Idle,
-                onStart      = viewModel::startThrottleBodyRelearn,
-                onDismiss    = viewModel::resetProcedure,
-            )
-        }
-
-        // ── Card 4: CVT Reset & Learning ──────────────────────────────────
-        item {
-            CvtResetCard(
-                conditions = cvtConds,
-                isActive   = activeProc == ActiveProcedure.CVT_RESET,
-                procState  = if (activeProc == ActiveProcedure.CVT_RESET || procState is ProcedureState.Success) procState else ProcedureState.Idle,
-                onTogglePark        = { viewModel.toggleCvtManualCondition(park = !cvtConds.inPark) },
-                onToggleAccessories = { viewModel.toggleCvtManualCondition(accessories = !cvtConds.accessoriesOff) },
-                onStart  = viewModel::startCvtReset,
-                onDismiss = viewModel::resetProcedure,
-            )
-        }
-
-        // ── Recommendations ────────────────────────────────────────────────
-        item {
-            RecommendationsCard()
-        }
-
-        // ── Vehicle Health (Known Issues) — bottom of screen ──────────────
+        // ── Vehicle Health (Known Issues) ─────────────────────────────────
         vehicle?.let { v ->
             if (v.knownIssueIds.isNotEmpty()) {
                 item {
@@ -263,6 +215,54 @@ fun ServiceScreen(
                     )
                 }
             }
+        }
+
+        // ── Engine Adaptation Reset ────────────────────────────────────────
+        item {
+            ProcedureCard(
+                title        = "Engine Adaptation Reset",
+                description  = "Clears ECU adaptive fuel trims. Required after engine work, injector replacement, or rough idle.",
+                icon         = Icons.Filled.Settings,
+                buttonLabel  = "Run Reset",
+                buttonColor  = DarkPrimary,
+                isActive     = activeProc == ActiveProcedure.ENGINE_ADAPT,
+                procState    = if (activeProc == ActiveProcedure.ENGINE_ADAPT || procState is ProcedureState.Success) procState else ProcedureState.Idle,
+                onStart      = viewModel::startEngineAdaptationReset,
+                onDismiss    = viewModel::resetProcedure,
+            )
+        }
+
+        // ── Throttle Body Relearn ──────────────────────────────────────────
+        item {
+            ProcedureCard(
+                title        = "Throttle Body Relearn",
+                description  = "Resets throttle position baseline. Required after cleaning throttle body or replacing the unit.",
+                icon         = Icons.Filled.Speed,
+                buttonLabel  = "Run Relearn",
+                buttonColor  = DarkPrimary,
+                isActive     = activeProc == ActiveProcedure.THROTTLE_RELEARN,
+                procState    = if (activeProc == ActiveProcedure.THROTTLE_RELEARN || procState is ProcedureState.Success) procState else ProcedureState.Idle,
+                onStart      = viewModel::startThrottleBodyRelearn,
+                onDismiss    = viewModel::resetProcedure,
+            )
+        }
+
+        // ── CVT Reset & Learning ───────────────────────────────────────────
+        item {
+            CvtResetCard(
+                conditions = cvtConds,
+                isActive   = activeProc == ActiveProcedure.CVT_RESET,
+                procState  = if (activeProc == ActiveProcedure.CVT_RESET || procState is ProcedureState.Success) procState else ProcedureState.Idle,
+                onTogglePark        = { viewModel.toggleCvtManualCondition(park = !cvtConds.inPark) },
+                onToggleAccessories = { viewModel.toggleCvtManualCondition(accessories = !cvtConds.accessoriesOff) },
+                onStart  = viewModel::startCvtReset,
+                onDismiss = viewModel::resetProcedure,
+            )
+        }
+
+        // ── Maintenance Tips ───────────────────────────────────────────────
+        item {
+            RecommendationsCard()
         }
 
         item { Spacer(Modifier.height(8.dp)) }

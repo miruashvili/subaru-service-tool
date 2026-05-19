@@ -2,6 +2,8 @@ package com.subaru.servicetool.ui.main
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.subaru.servicetool.data.bluetooth.BluetoothConnectionState
+import com.subaru.servicetool.data.bluetooth.OBDBluetoothManager
 import com.subaru.servicetool.data.model.VehicleSpec
 import com.subaru.servicetool.data.obd.ObdPids
 import com.subaru.servicetool.data.obd.ObdQueryEngine
@@ -17,6 +19,7 @@ import javax.inject.Inject
 class MainViewModel @Inject constructor(
     userPreferences: UserPreferences,
     obdQueryEngine: ObdQueryEngine,
+    bluetoothManager: OBDBluetoothManager,
 ) : ViewModel() {
 
     // null while DataStore is still initializing
@@ -30,4 +33,8 @@ class MainViewModel @Inject constructor(
     val ambientTemp: StateFlow<Float?> = obdQueryEngine.sensorValues
         .map { it[ObdPids.AMBIENT_TEMP.cmd] }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initialValue = null)
+
+    val isConnected: StateFlow<Boolean> = bluetoothManager.connectionState
+        .map { it is BluetoothConnectionState.Connected }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initialValue = false)
 }

@@ -56,6 +56,22 @@ class UserPreferences @Inject constructor(
         private val KEY_LS_SQ_1          = stringPreferencesKey("ls_sq_1")
         private val KEY_LS_SQ_2          = stringPreferencesKey("ls_sq_2")
         private val KEY_LS_SQ_3          = stringPreferencesKey("ls_sq_3")
+
+        // ── New 3-row landscape system ─────────────────────────────────────────
+        private val KEY_LS_TOP_0      = stringPreferencesKey("ls_top_0")
+        private val KEY_LS_TOP_1      = stringPreferencesKey("ls_top_1")
+        private val KEY_LS_TOP_2      = stringPreferencesKey("ls_top_2")
+        private val KEY_LS_TOP_3      = stringPreferencesKey("ls_top_3")
+        private val KEY_LS_MID_0      = stringPreferencesKey("ls_mid_0")
+        private val KEY_LS_MID_1      = stringPreferencesKey("ls_mid_1")
+        private val KEY_LS_MID_2      = stringPreferencesKey("ls_mid_2")
+        private val KEY_LS_BOT_0      = stringPreferencesKey("ls_bot_0")
+        private val KEY_LS_BOT_1      = stringPreferencesKey("ls_bot_1")
+        private val KEY_LS_BOT_2      = stringPreferencesKey("ls_bot_2")
+        private val KEY_LS_BOT_3      = stringPreferencesKey("ls_bot_3")
+        private val KEY_LS_BOT_WIDE_0 = stringPreferencesKey("ls_bot_wide_0")
+        private val KEY_LS_BOT_WIDE_1 = stringPreferencesKey("ls_bot_wide_1")
+        private val KEY_LS_BOT_MODE   = stringPreferencesKey("ls_bot_mode")
     }
 
     // ── Vehicle & onboarding ──────────────────────────────────────────────────
@@ -240,6 +256,88 @@ class UserPreferences @Inject constructor(
                 5 -> prefs[KEY_LS_SQ_3] = pidCmd
             }
         }
+    }
+
+    // ── New 3-row landscape slots ─────────────────────────────────────────────
+
+    val lsTopSlots: Flow<List<String>> = dataStore.data.map { prefs ->
+        listOf(
+            prefs[KEY_LS_TOP_0] ?: "0105",    // Coolant Temp
+            prefs[KEY_LS_TOP_1] ?: "221017",  // CVT Fluid Temp
+            prefs[KEY_LS_TOP_2] ?: "010C",    // Engine RPM
+            prefs[KEY_LS_TOP_3] ?: "010D",    // Vehicle Speed
+        )
+    }
+
+    val lsMidSlots: Flow<List<String>> = dataStore.data.map { prefs ->
+        listOf(
+            prefs[KEY_LS_MID_0] ?: "221018",   // AWD Distribution
+            prefs[KEY_LS_MID_1] ?: "FUEL_CONS", // Fuel Consumption
+            prefs[KEY_LS_MID_2] ?: "010D",      // Vehicle Speed
+        )
+    }
+
+    val lsBotSlots: Flow<List<String>> = dataStore.data.map { prefs ->
+        listOf(
+            prefs[KEY_LS_BOT_0] ?: "0104",   // Engine Load
+            prefs[KEY_LS_BOT_1] ?: "010C",   // Engine RPM
+            prefs[KEY_LS_BOT_2] ?: "ATRV",   // Battery Voltage
+            prefs[KEY_LS_BOT_3] ?: "221017", // CVT Fluid Temp
+        )
+    }
+
+    val lsBotWideSlots: Flow<List<String>> = dataStore.data.map { prefs ->
+        listOf(
+            prefs[KEY_LS_BOT_WIDE_0] ?: "TPMS_ALL", // TPMS All Tires
+            prefs[KEY_LS_BOT_WIDE_1] ?: "221018",   // AWD Distribution
+        )
+    }
+
+    val lsBotMode: Flow<String> = dataStore.data.map { it[KEY_LS_BOT_MODE] ?: "square" }
+
+    suspend fun setLsTopSlot(index: Int, cmd: String) {
+        dataStore.edit { prefs ->
+            when (index) {
+                0 -> prefs[KEY_LS_TOP_0] = cmd
+                1 -> prefs[KEY_LS_TOP_1] = cmd
+                2 -> prefs[KEY_LS_TOP_2] = cmd
+                3 -> prefs[KEY_LS_TOP_3] = cmd
+            }
+        }
+    }
+
+    suspend fun setLsMidSlot(index: Int, cmd: String) {
+        dataStore.edit { prefs ->
+            when (index) {
+                0 -> prefs[KEY_LS_MID_0] = cmd
+                1 -> prefs[KEY_LS_MID_1] = cmd
+                2 -> prefs[KEY_LS_MID_2] = cmd
+            }
+        }
+    }
+
+    suspend fun setLsBotSlot(index: Int, cmd: String) {
+        dataStore.edit { prefs ->
+            when (index) {
+                0 -> prefs[KEY_LS_BOT_0] = cmd
+                1 -> prefs[KEY_LS_BOT_1] = cmd
+                2 -> prefs[KEY_LS_BOT_2] = cmd
+                3 -> prefs[KEY_LS_BOT_3] = cmd
+            }
+        }
+    }
+
+    suspend fun setLsBotWideSlot(index: Int, cmd: String) {
+        dataStore.edit { prefs ->
+            when (index) {
+                0 -> prefs[KEY_LS_BOT_WIDE_0] = cmd
+                1 -> prefs[KEY_LS_BOT_WIDE_1] = cmd
+            }
+        }
+    }
+
+    suspend fun setLsBotMode(mode: String) {
+        dataStore.edit { it[KEY_LS_BOT_MODE] = mode }
     }
 
     // ── Fuel avg reset timestamp ──────────────────────────────────────────────

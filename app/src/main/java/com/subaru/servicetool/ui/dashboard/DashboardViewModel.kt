@@ -211,6 +211,119 @@ class DashboardViewModel @Inject constructor(
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    // ── New 3-row landscape metrics ───────────────────────────────────────────
+
+    val lsBotMode: StateFlow<String> = userPreferences.lsBotMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "square")
+
+    val lsTopSlotCmds: StateFlow<List<String>> = userPreferences.lsTopSlots
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf("0105", "221017", "010C", "010D"))
+
+    val lsMidSlotCmds: StateFlow<List<String>> = userPreferences.lsMidSlots
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf("221018", "FUEL_CONS", "010D"))
+
+    val lsBotSlotCmds: StateFlow<List<String>> = userPreferences.lsBotSlots
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf("0104", "010C", "ATRV", "221017"))
+
+    val lsBotWideSlotCmds: StateFlow<List<String>> = userPreferences.lsBotWideSlots
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf("TPMS_ALL", "221018"))
+
+    val lsTopMetrics: StateFlow<List<LiveMetric>> = combine(
+        userPreferences.lsTopSlots,
+        obdEngine.sensorValues,
+        userPreferences.displayUnits,
+        bluetoothManager.connectionState,
+    ) { slots, values, units, btState ->
+        val connected = btState is BluetoothConnectionState.Connected
+        slots.mapIndexed { i, cmd ->
+            val pid = ObdPids.ALL.find { it.cmd == cmd } ?: ObdPids.RPM
+            val rawVal = if (connected) values[cmd] else null
+            pidToMetric(i, pid, rawVal, units).copy(id = "ls_top_$i", cmd = cmd)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val lsMidMetrics: StateFlow<List<LiveMetric>> = combine(
+        userPreferences.lsMidSlots,
+        obdEngine.sensorValues,
+        userPreferences.displayUnits,
+        bluetoothManager.connectionState,
+    ) { slots, values, units, btState ->
+        val connected = btState is BluetoothConnectionState.Connected
+        slots.mapIndexed { i, cmd ->
+            val pid = ObdPids.ALL.find { it.cmd == cmd } ?: ObdPids.SPEED
+            val rawVal = if (connected && cmd != "FUEL_CONS" && cmd != "TPMS_ALL") values[cmd] else null
+            pidToMetric(i, pid, rawVal, units).copy(id = "ls_mid_$i", cmd = cmd)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val lsBotMetrics: StateFlow<List<LiveMetric>> = combine(
+        userPreferences.lsBotSlots,
+        obdEngine.sensorValues,
+        userPreferences.displayUnits,
+        bluetoothManager.connectionState,
+    ) { slots, values, units, btState ->
+        val connected = btState is BluetoothConnectionState.Connected
+        slots.mapIndexed { i, cmd ->
+            val pid = ObdPids.ALL.find { it.cmd == cmd } ?: ObdPids.RPM
+            val rawVal = if (connected) values[cmd] else null
+            pidToMetric(i, pid, rawVal, units).copy(id = "ls_bot_$i", cmd = cmd)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val lsBotWideMetrics: StateFlow<List<LiveMetric>> = combine(
+        userPreferences.lsBotWideSlots,
+        obdEngine.sensorValues,
+        userPreferences.displayUnits,
+        bluetoothManager.connectionState,
+    ) { slots, values, units, btState ->
+        val connected = btState is BluetoothConnectionState.Connected
+        slots.mapIndexed { i, cmd ->
+            val pid = ObdPids.ALL.find { it.cmd == cmd } ?: ObdPids.RPM
+            val rawVal = if (connected && cmd != "TPMS_ALL") values[cmd] else null
+            pidToMetric(i, pid, rawVal, units).copy(id = "ls_bot_wide_$i", cmd = cmd)
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    // ── Landscape row slot editing ────────────────────────────────────────────
+
+    private val _editingLsTopSlot = MutableStateFlow<Int?>(null)
+    val editingLsTopSlot: StateFlow<Int?> = _editingLsTopSlot.asStateFlow()
+
+    private val _editingLsMidSlot = MutableStateFlow<Int?>(null)
+    val editingLsMidSlot: StateFlow<Int?> = _editingLsMidSlot.asStateFlow()
+
+    private val _editingLsBotSlot = MutableStateFlow<Int?>(null)
+    val editingLsBotSlot: StateFlow<Int?> = _editingLsBotSlot.asStateFlow()
+
+    private val _editingLsBotWideSlot = MutableStateFlow<Int?>(null)
+    val editingLsBotWideSlot: StateFlow<Int?> = _editingLsBotWideSlot.asStateFlow()
+
+    fun openLsTopEditor(slot: Int)      { _editingLsTopSlot.value = slot }
+    fun closeLsTopEditor()              { _editingLsTopSlot.value = null }
+    fun openLsMidEditor(slot: Int)      { _editingLsMidSlot.value = slot }
+    fun closeLsMidEditor()              { _editingLsMidSlot.value = null }
+    fun openLsBotEditor(slot: Int)      { _editingLsBotSlot.value = slot }
+    fun closeLsBotEditor()              { _editingLsBotSlot.value = null }
+    fun openLsBotWideEditor(slot: Int)  { _editingLsBotWideSlot.value = slot }
+    fun closeLsBotWideEditor()          { _editingLsBotWideSlot.value = null }
+
+    fun setLsTopSlot(slot: Int, cmd: String) {
+        _editingLsTopSlot.value = null
+        viewModelScope.launch { userPreferences.setLsTopSlot(slot, cmd) }
+    }
+    fun setLsMidSlot(slot: Int, cmd: String) {
+        _editingLsMidSlot.value = null
+        viewModelScope.launch { userPreferences.setLsMidSlot(slot, cmd) }
+    }
+    fun setLsBotSlot(slot: Int, cmd: String) {
+        _editingLsBotSlot.value = null
+        viewModelScope.launch { userPreferences.setLsBotSlot(slot, cmd) }
+    }
+    fun setLsBotWideSlot(slot: Int, cmd: String) {
+        _editingLsBotWideSlot.value = null
+        viewModelScope.launch { userPreferences.setLsBotWideSlot(slot, cmd) }
+    }
+
     private fun computeFuelConsumption(values: Map<String, Float>, units: DisplayUnits): FuelConsumptionState {
         val maf   = values[ObdPids.MAF.cmd]
         val speed = values[ObdPids.SPEED.cmd]
@@ -330,6 +443,15 @@ class DashboardViewModel @Inject constructor(
     val configurableWidePids: List<ObdPid> = ObdPids.CONFIGURABLE +
         ObdPids.AWD_DUTY +
         ObdPids.TPMS_FL.copy(name = "TPMS Pressure (All)")
+
+    val configurableMidPids: List<ObdPid> = ObdPids.CONFIGURABLE +
+        ObdPids.AWD_DUTY +
+        ObdPids.TPMS_FL.copy(cmd = "TPMS_ALL", name = "TPMS Pressure (All)") +
+        ObdPids.FUEL_LEVEL.copy(cmd = "FUEL_CONS", name = "Fuel Consumption", unit = "L/100km")
+
+    val configurableBotWidePids: List<ObdPid> = ObdPids.CONFIGURABLE +
+        ObdPids.AWD_DUTY +
+        ObdPids.TPMS_FL.copy(cmd = "TPMS_ALL", name = "TPMS Pressure (All)")
 
     val currentGaugeSlots: StateFlow<List<String>> = gaugeSlots
 

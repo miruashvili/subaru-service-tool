@@ -1,23 +1,31 @@
 package com.subaru.servicetool.ui.navigation
 
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.content.res.Configuration
+import android.os.BatteryManager
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.DeviceThermostat
@@ -26,24 +34,33 @@ import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -62,6 +79,8 @@ import com.subaru.servicetool.ui.theme.DarkError
 import com.subaru.servicetool.ui.theme.DarkPrimary
 import com.subaru.servicetool.ui.theme.DarkSuccess
 import com.subaru.servicetool.ui.theme.DarkWarning
+import kotlinx.coroutines.delay
+import java.util.Calendar
 
 sealed class Screen(val route: String, val labelRes: Int, val icon: ImageVector) {
     object Dashboard : Screen("dashboard", R.string.nav_dashboard, Icons.Filled.Speed)
@@ -106,9 +125,11 @@ private fun MainNavHost() {
     val mainViewModel: MainViewModel = hiltViewModel()
     val ambientTemp by mainViewModel.ambientTemp.collectAsState()
 
+    val isConnected by mainViewModel.isConnected.collectAsState()
+
     if (isLandscape) {
-        // ── Landscape: content on left, NavigationRail on right ───────────
-        Row(
+        // ── Landscape: full-screen NavHost with overlay pill + status bar ─
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background),
@@ -116,12 +137,12 @@ private fun MainNavHost() {
             NavHost(
                 navController    = navController,
                 startDestination = Screen.Dashboard.route,
-                modifier         = Modifier.weight(1f),
+                modifier         = Modifier.fillMaxSize(),
             ) {
                 landscapeComposables(navController)
             }
             if (showNavigation) {
-                AppNavigationRail(
+                LandscapeNavPill(
                     navBackStack = navBackStack,
                     ambientTemp  = ambientTemp,
                     onNavigate   = { screen ->
@@ -131,8 +152,13 @@ private fun MainNavHost() {
                             restoreState = true
                         }
                     },
+                    modifier = Modifier.align(Alignment.CenterEnd),
                 )
             }
+            LandscapeStatusBar(
+                isConnected = isConnected,
+                modifier    = Modifier.align(Alignment.TopEnd),
+            )
         }
     } else {
         // ── Portrait: NavigationBar at the bottom ──────────────────────────
@@ -181,66 +207,123 @@ private fun AppNavigationBar(
 }
 
 @Composable
-private fun AppNavigationRail(
-    navBackStack: androidx.navigation.NavBackStackEntry?,
+private fun LandscapeNavPill(
+    navBackStack: NavBackStackEntry?,
     ambientTemp: Float?,
     onNavigate: (Screen) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val screenWidthDp = LocalConfiguration.current.screenWidthDp
-    val railWidth = when {
-        screenWidthDp < 600  -> 64.dp
-        screenWidthDp <= 840 -> 72.dp
-        else                 -> 80.dp
-    }
-
-    NavigationRail(
-        modifier       = Modifier
-            .width(railWidth)
-            .background(MaterialTheme.colorScheme.surface),
-        containerColor = MaterialTheme.colorScheme.surface,
+    Surface(
+        color  = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
+        shape  = RoundedCornerShape(topStart = 14.dp, bottomStart = 14.dp),
+        tonalElevation = 4.dp,
+        modifier = modifier,
     ) {
-        val currentDest = navBackStack?.destination
-        Spacer(Modifier.weight(1f))
-        bottomNavItems.forEach { screen ->
-            NavigationRailItem(
-                icon     = { Icon(screen.icon, contentDescription = stringResource(screen.labelRes)) },
-                label    = null,
-                selected = currentDest?.hierarchy?.any { it.route == screen.route } == true,
-                onClick  = { onNavigate(screen) },
-            )
-        }
-        Spacer(Modifier.weight(1f))
-
-        // Ambient temperature display at the bottom of the rail
-        HorizontalDivider(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 8.dp),
-            color = MaterialTheme.colorScheme.onSurface.copy(0.12f),
-        )
-        Spacer(Modifier.height(8.dp))
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(bottom = 12.dp),
+            verticalArrangement = Arrangement.Center,
+            modifier = Modifier.padding(vertical = 10.dp, horizontal = 2.dp),
         ) {
-            Icon(
-                imageVector = Icons.Filled.DeviceThermostat,
-                contentDescription = null,
-                modifier = Modifier.size(16.dp),
-                tint = when {
-                    ambientTemp == null    -> MaterialTheme.colorScheme.onSurface.copy(0.3f)
-                    ambientTemp > 35f      -> DarkError
-                    ambientTemp > 25f      -> DarkWarning
-                    ambientTemp < 5f       -> DarkPrimary
-                    else                   -> DarkSuccess
-                },
-            )
-            Spacer(Modifier.height(2.dp))
-            Text(
-                text = if (ambientTemp != null) "%.0f°".format(ambientTemp) else "--",
-                fontSize = 16.sp,
-                color = MaterialTheme.colorScheme.onSurface,
-                style = MaterialTheme.typography.labelMedium,
+            val currentDest = navBackStack?.destination
+            bottomNavItems.forEach { screen ->
+                val selected = currentDest?.hierarchy?.any { it.route == screen.route } == true
+                IconButton(onClick = { onNavigate(screen) }, modifier = Modifier.size(40.dp)) {
+                    Icon(
+                        imageVector        = screen.icon,
+                        contentDescription = stringResource(screen.labelRes),
+                        tint               = if (selected) MaterialTheme.colorScheme.primary
+                                             else MaterialTheme.colorScheme.onSurface.copy(0.45f),
+                        modifier           = Modifier.size(22.dp),
+                    )
+                }
+            }
+            ambientTemp?.let { temp ->
+                Spacer(Modifier.height(4.dp))
+                HorizontalDivider(modifier = Modifier.width(28.dp), color = MaterialTheme.colorScheme.onSurface.copy(0.12f))
+                Spacer(Modifier.height(4.dp))
+                Icon(
+                    imageVector        = Icons.Filled.DeviceThermostat,
+                    contentDescription = null,
+                    modifier           = Modifier.size(14.dp),
+                    tint               = when {
+                        temp > 35f -> DarkError
+                        temp > 25f -> DarkWarning
+                        temp < 5f  -> DarkPrimary
+                        else       -> DarkSuccess
+                    },
+                )
+                Text(
+                    text  = "%.0f°".format(temp),
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LandscapeStatusBar(
+    isConnected: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+
+    var batteryLevel by remember { mutableIntStateOf(-1) }
+    DisposableEffect(Unit) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context, intent: Intent) {
+                val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
+                val scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, 100)
+                if (level >= 0) batteryLevel = level * 100 / scale
+            }
+        }
+        context.registerReceiver(receiver, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+
+    var timeStr by remember { mutableStateOf("--:--") }
+    var dateStr by remember { mutableStateOf("") }
+    LaunchedEffect(Unit) {
+        while (true) {
+            val cal = Calendar.getInstance()
+            timeStr = "%02d:%02d".format(cal.get(Calendar.HOUR_OF_DAY), cal.get(Calendar.MINUTE))
+            val months = arrayOf("Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec")
+            dateStr = "${cal.get(Calendar.DAY_OF_MONTH)} ${months[cal.get(Calendar.MONTH)]}"
+            delay(30_000L)
+        }
+    }
+
+    Surface(
+        color  = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+        shape  = RoundedCornerShape(bottomStart = 10.dp),
+        modifier = modifier,
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            Text(timeStr,
+                fontSize = 12.sp, style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface)
+            Text(dateStr,
+                fontSize = 11.sp, style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(0.55f))
+            if (batteryLevel >= 0) {
+                Icon(Icons.Filled.BatteryFull, contentDescription = null,
+                    modifier = Modifier.size(12.dp),
+                    tint = MaterialTheme.colorScheme.onSurface.copy(0.55f))
+                Text("$batteryLevel%",
+                    fontSize = 11.sp, style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(0.55f))
+            }
+            Box(
+                modifier = Modifier
+                    .size(7.dp)
+                    .clip(CircleShape)
+                    .background(if (isConnected) DarkSuccess else MaterialTheme.colorScheme.onSurface.copy(0.25f))
             )
         }
     }

@@ -22,7 +22,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -80,6 +79,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -117,19 +118,30 @@ fun DashboardScreen(
     onNavigateToBluetooth: () -> Unit = {},
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
-    val state            by viewModel.uiState.collectAsState()
-    val alertLevel       by viewModel.showAlertBanner.collectAsState()
-    val connLost         by viewModel.connectionLostVisible.collectAsState()
-    val editingSlot      by viewModel.editingSlot.collectAsState()
-    val editingWideSlot  by viewModel.editingWideSlot.collectAsState()
-    val editingLsSlot    by viewModel.editingLsSlot.collectAsState()
-    val gaugeSlots       by viewModel.currentGaugeSlots.collectAsState()
-    val wideSlots        by viewModel.currentWideGaugeSlots.collectAsState()
-    val lsMetrics        by viewModel.landscapeBottomMetrics.collectAsState()
-    val lsLayout         by viewModel.landscapeBottomLayout.collectAsState()
-    val configuration    = LocalConfiguration.current
-    val isLandscape      = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val screenWidthDp    = configuration.screenWidthDp
+    val state              by viewModel.uiState.collectAsState()
+    val alertLevel         by viewModel.showAlertBanner.collectAsState()
+    val connLost           by viewModel.connectionLostVisible.collectAsState()
+    val editingSlot        by viewModel.editingSlot.collectAsState()
+    val editingWideSlot    by viewModel.editingWideSlot.collectAsState()
+    val gaugeSlots         by viewModel.currentGaugeSlots.collectAsState()
+    val wideSlots          by viewModel.currentWideGaugeSlots.collectAsState()
+    // New landscape row state
+    val lsBotMode          by viewModel.lsBotMode.collectAsState()
+    val lsTopMetrics       by viewModel.lsTopMetrics.collectAsState()
+    val lsMidMetrics       by viewModel.lsMidMetrics.collectAsState()
+    val lsMidSlotCmds      by viewModel.lsMidSlotCmds.collectAsState()
+    val lsBotMetrics       by viewModel.lsBotMetrics.collectAsState()
+    val lsBotWideMetrics   by viewModel.lsBotWideMetrics.collectAsState()
+    val lsBotWideSlotCmds  by viewModel.lsBotWideSlotCmds.collectAsState()
+    val lsTopSlotCmds      by viewModel.lsTopSlotCmds.collectAsState()
+    val lsBotSlotCmds      by viewModel.lsBotSlotCmds.collectAsState()
+    val editingLsTopSlot   by viewModel.editingLsTopSlot.collectAsState()
+    val editingLsMidSlot   by viewModel.editingLsMidSlot.collectAsState()
+    val editingLsBotSlot   by viewModel.editingLsBotSlot.collectAsState()
+    val editingLsBotWideSlot by viewModel.editingLsBotWideSlot.collectAsState()
+    val configuration      = LocalConfiguration.current
+    val isLandscape        = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val screenWidthDp      = configuration.screenWidthDp
 
     val gaugeValueSp: TextUnit = when {
         screenWidthDp < 600  -> 28.sp
@@ -177,21 +189,58 @@ fun DashboardScreen(
         }
     }
 
-    if (editingLsSlot != null) {
-        val lsAbsSlot = editingLsSlot!!
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    if (editingLsTopSlot != null) {
         ModalBottomSheet(
-            onDismissRequest = viewModel::closeLsGaugeEditor,
-            sheetState = sheetState,
+            onDismissRequest = viewModel::closeLsTopEditor,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
         ) {
             GaugeSelectorSheet(
                 pids       = viewModel.configurablePids,
-                currentCmd = lsMetrics.getOrNull(lsAbsSlot % lsMetrics.size)?.cmd ?: "",
-                onSelect   = { pid ->
-                    val absIdx = if (lsLayout == "wide") lsAbsSlot else lsAbsSlot + 2
-                    viewModel.setLandscapeSlot(absIdx, pid.cmd)
-                },
-                onDismiss  = viewModel::closeLsGaugeEditor,
+                currentCmd = lsTopSlotCmds.getOrNull(editingLsTopSlot!!) ?: "",
+                onSelect   = { pid -> viewModel.setLsTopSlot(editingLsTopSlot!!, pid.cmd) },
+                onDismiss  = viewModel::closeLsTopEditor,
+            )
+        }
+    }
+
+    if (editingLsMidSlot != null) {
+        ModalBottomSheet(
+            onDismissRequest = viewModel::closeLsMidEditor,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        ) {
+            GaugeSelectorSheet(
+                pids       = viewModel.configurableMidPids,
+                currentCmd = lsMidSlotCmds.getOrNull(editingLsMidSlot!!) ?: "",
+                onSelect   = { pid -> viewModel.setLsMidSlot(editingLsMidSlot!!, pid.cmd) },
+                onDismiss  = viewModel::closeLsMidEditor,
+            )
+        }
+    }
+
+    if (editingLsBotSlot != null) {
+        ModalBottomSheet(
+            onDismissRequest = viewModel::closeLsBotEditor,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        ) {
+            GaugeSelectorSheet(
+                pids       = viewModel.configurablePids,
+                currentCmd = lsBotSlotCmds.getOrNull(editingLsBotSlot!!) ?: "",
+                onSelect   = { pid -> viewModel.setLsBotSlot(editingLsBotSlot!!, pid.cmd) },
+                onDismiss  = viewModel::closeLsBotEditor,
+            )
+        }
+    }
+
+    if (editingLsBotWideSlot != null) {
+        ModalBottomSheet(
+            onDismissRequest = viewModel::closeLsBotWideEditor,
+            sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        ) {
+            GaugeSelectorSheet(
+                pids       = viewModel.configurableBotWidePids,
+                currentCmd = lsBotWideSlotCmds.getOrNull(editingLsBotWideSlot!!) ?: "",
+                onSelect   = { pid -> viewModel.setLsBotWideSlot(editingLsBotWideSlot!!, pid.cmd) },
+                onDismiss  = viewModel::closeLsBotWideEditor,
             )
         }
     }
@@ -203,32 +252,26 @@ fun DashboardScreen(
             .padding(paddingValues),
     ) {
         if (isLandscape) {
-            // ── Landscape: no scroll, 4-gauge row + configurable bottom ───
+            // ── Landscape: 3-row layout (40% / 20% / 40%), no scroll ─────
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                    .padding(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                DashboardTopBar(
-                    connectionState = state.connectionState,
-                    ambientTemp     = state.ambientTemp,
-                    connectedName   = state.connectedDeviceName,
-                    dtcCount        = state.dtcCount,
-                )
                 AlertBanner(alertLevel, onDismiss = viewModel::dismissAlert)
 
-                // Top section: 4 gauge cards in a row (60% of remaining height)
+                // Row 1: 4 square gauge cards (~40%)
                 Row(
                     modifier = Modifier
-                        .weight(0.6f)
-                        .fillMaxWidth()
-                        .padding(top = 4.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        .weight(0.4f)
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     for (i in 0..3) {
                         MetricCard(
-                            metric         = state.metrics.getOrElse(i) { state.metrics.firstOrNull() ?: return@Row },
-                            onEdit         = { viewModel.openGaugeEditor(i) },
+                            metric         = lsTopMetrics.getOrElse(i) { lsTopMetrics.firstOrNull() ?: return@Row },
+                            onEdit         = { viewModel.openLsTopEditor(i) },
                             modifier       = Modifier.weight(1f),
                             useAspectRatio = false,
                             valueFontSize  = gaugeValueSp,
@@ -237,29 +280,51 @@ fun DashboardScreen(
                     }
                 }
 
-                Spacer(Modifier.height(6.dp))
+                // Row 2: 3 wide sensor bars (~20%)
+                Row(
+                    modifier = Modifier
+                        .weight(0.2f)
+                        .fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    for (i in 0..2) {
+                        LandscapeMidBar(
+                            cmd     = lsMidSlotCmds.getOrElse(i) { "010D" },
+                            metric  = lsMidMetrics.getOrNull(i),
+                            state   = state,
+                            onEdit  = { viewModel.openLsMidEditor(i) },
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
+                        )
+                    }
+                }
 
-                // Bottom section: configurable slots (40% of remaining height)
+                // Row 3: bottom section (~40%) — square or wide mode
                 Row(
                     modifier = Modifier
                         .weight(0.4f)
                         .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    val numSlots = if (lsLayout == "wide") 2 else 4
-                    for (i in 0 until numSlots) {
-                        val metric = lsMetrics.getOrNull(i)
-                        if (metric != null) {
+                    if (lsBotMode == "square") {
+                        for (i in 0..3) {
                             MetricCard(
-                                metric         = metric,
-                                onEdit         = { viewModel.openLsGaugeEditor(i) },
+                                metric         = lsBotMetrics.getOrElse(i) { lsBotMetrics.firstOrNull() ?: return@Row },
+                                onEdit         = { viewModel.openLsBotEditor(i) },
                                 modifier       = Modifier.weight(1f),
                                 useAspectRatio = false,
                                 valueFontSize  = gaugeValueSp,
                                 labelFontSize  = gaugeLabelSp,
                             )
-                        } else {
-                            Spacer(Modifier.weight(1f))
+                        }
+                    } else {
+                        for (i in 0..1) {
+                            LandscapeBotWideCard(
+                                cmd      = lsBotWideSlotCmds.getOrElse(i) { "221018" },
+                                metric   = lsBotWideMetrics.getOrNull(i),
+                                state    = state,
+                                onEdit   = { viewModel.openLsBotWideEditor(i) },
+                                modifier = Modifier.weight(1f).fillMaxHeight(),
+                            )
                         }
                     }
                 }
@@ -525,15 +590,25 @@ private fun MetricCard(
         tonalElevation = 2.dp,
         modifier = surfaceMod,
     ) {
-        BoxWithConstraints(contentAlignment = Alignment.Center) {
-            val canvasSize = maxWidth * 0.85f
-            androidx.compose.foundation.Canvas(modifier = Modifier.size(canvasSize)) {
+        Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(14.dp)),
+        ) {
+            // Arc drawn in full-card canvas; arc radius derived from min(w,h) to prevent overflow
+            androidx.compose.foundation.Canvas(modifier = Modifier.fillMaxSize()) {
+                val sz = minOf(size.width, size.height)
+                val arcSz = sz * 0.82f
+                val tlX = (size.width - arcSz) / 2f
+                val tlY = (size.height - arcSz) / 2f * 0.7f
                 val stroke = Stroke(width = 10.dp.toPx(), cap = StrokeCap.Round)
                 val startAngle = 150f
                 val sweepTotal = 240f
-                drawArc(color = arcBg, startAngle = startAngle, sweepAngle = sweepTotal, useCenter = false, style = stroke)
+                drawArc(color = arcBg, topLeft = Offset(tlX, tlY), size = Size(arcSz, arcSz),
+                    startAngle = startAngle, sweepAngle = sweepTotal, useCenter = false, style = stroke)
                 if (metric.fraction != null && animatedFraction > 0f) {
-                    drawArc(color = arcColor, startAngle = startAngle, sweepAngle = sweepTotal * animatedFraction, useCenter = false, style = stroke)
+                    drawArc(color = arcColor, topLeft = Offset(tlX, tlY), size = Size(arcSz, arcSz),
+                        startAngle = startAngle, sweepAngle = sweepTotal * animatedFraction,
+                        useCenter = false, style = stroke)
                 }
             }
             Column(
@@ -685,6 +760,133 @@ private fun TireCell(pos: String, value: String, unit: String) {
             color = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface)
         Text(unit, style = MaterialTheme.typography.labelSmall, color = GaugeUnitColor)
         Text(pos, style = MaterialTheme.typography.labelSmall, color = GaugeLabelColor)
+    }
+}
+
+// ── Landscape mid-row bar (wide sensor card, ~20% height) ─────────────────────
+
+@Composable
+private fun LandscapeMidBar(
+    cmd: String,
+    metric: LiveMetric?,
+    state: DashboardUiState,
+    onEdit: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val isDark = isSystemInDarkTheme()
+    val cardBg = if (isDark) GaugeCardBg else MaterialTheme.colorScheme.surface
+
+    Surface(
+        color = cardBg,
+        shape = RoundedCornerShape(12.dp),
+        tonalElevation = 2.dp,
+        modifier = modifier,
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            when (cmd) {
+                ObdPids.AWD_DUTY.cmd -> AwdContent(rearDuty = state.awdDuty ?: 0f, compact = true)
+                "FUEL_CONS"          -> FuelMidContent(fuel = state.fuelConsumption)
+                "TPMS_ALL"           -> TpmsContent(data = state.tpmsData, units = state.displayUnits)
+                else                 -> if (metric != null) WideSensorBarContent(metric = metric)
+            }
+            IconButton(onClick = onEdit, modifier = Modifier.align(Alignment.TopEnd).size(28.dp)) {
+                Icon(Icons.Filled.Edit, contentDescription = "Edit",
+                    tint = MaterialTheme.colorScheme.onSurface.copy(0.25f), modifier = Modifier.size(14.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun WideSensorBarContent(metric: LiveMetric) {
+    val isDark     = isSystemInDarkTheme()
+    val arcColor   = when {
+        metric.alertLevel == MetricAlertLevel.CRITICAL -> GaugeTempCrit
+        metric.alertLevel == MetricAlertLevel.WARNING  -> GaugeTempWarn
+        metric.highlight                               -> DarkWarning
+        isDark                                         -> GaugeArcActive
+        else                                           -> MaterialTheme.colorScheme.primary
+    }
+    val valueColor = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
+
+    Row(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(imageVector = metricIcon(metric.iconRes), contentDescription = null,
+            tint = arcColor, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(metric.label, style = MaterialTheme.typography.labelSmall,
+            color = GaugeLabelColor, modifier = Modifier.weight(1f), maxLines = 1)
+        Text(metric.value,
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = valueColor)
+        Spacer(Modifier.width(4.dp))
+        Text(metric.unit, style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface.copy(0.45f))
+    }
+}
+
+@Composable
+private fun FuelMidContent(fuel: FuelConsumptionState) {
+    val isDark     = isSystemInDarkTheme()
+    val valueColor = if (isDark) Color.White else MaterialTheme.colorScheme.onSurface
+    val instant = fuel.instantMpg?.let { "%.1f mpg".format(it) }
+        ?: fuel.instantKml?.let { "%.1f km/L".format(it) }
+        ?: fuel.instantL100?.let { "%.1f".format(it) }
+        ?: "--"
+    val unit = if (fuel.instantL100 != null) "L/100" else ""
+
+    Row(
+        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(Icons.Filled.LocalGasStation, contentDescription = null,
+            tint = GaugeArcActive, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Fuel", style = MaterialTheme.typography.labelSmall,
+            color = GaugeLabelColor, modifier = Modifier.weight(1f))
+        Text(instant,
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+            color = valueColor)
+        if (unit.isNotEmpty()) {
+            Spacer(Modifier.width(4.dp))
+            Text(unit, style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(0.45f))
+        }
+    }
+}
+
+// ── Landscape bottom-row wide card (MODE B, ~40% height) ──────────────────────
+
+@Composable
+private fun LandscapeBotWideCard(
+    cmd: String,
+    metric: LiveMetric?,
+    state: DashboardUiState,
+    onEdit: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val isDark = isSystemInDarkTheme()
+    val cardBg = if (isDark) GaugeCardBg else MaterialTheme.colorScheme.surface
+
+    Surface(
+        color = cardBg,
+        shape = RoundedCornerShape(14.dp),
+        tonalElevation = 2.dp,
+        modifier = modifier,
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            when (cmd) {
+                ObdPids.AWD_DUTY.cmd -> AwdContent(rearDuty = state.awdDuty ?: 0f, compact = false)
+                "TPMS_ALL"           -> TpmsContent(data = state.tpmsData, units = state.displayUnits)
+                else                 -> if (metric != null) WideMetricContent(metric = metric)
+            }
+            IconButton(onClick = onEdit, modifier = Modifier.align(Alignment.TopEnd).size(28.dp)) {
+                Icon(Icons.Filled.Edit, contentDescription = "Edit",
+                    tint = MaterialTheme.colorScheme.onSurface.copy(0.25f), modifier = Modifier.size(14.dp))
+            }
+        }
     }
 }
 

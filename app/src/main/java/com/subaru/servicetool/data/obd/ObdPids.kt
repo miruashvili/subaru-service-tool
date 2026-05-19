@@ -146,4 +146,18 @@ object ObdPids {
 
     // PIDs available for gauge configuration (excludes ATRV, TPMS, and AWD_DUTY which has its own widget)
     val CONFIGURABLE: List<ObdPid> = (DASHBOARD.filter { it.cmd != "ATRV" } + EXTENDED.filter { it != AWD_DUTY }).distinctBy { it.cmd }
+
+    // ── Adaptive polling tiers ────────────────────────────────────────────────
+
+    /** Polled every cycle — critical for real-time display. */
+    val TIER1 = listOf(RPM, SPEED, COOLANT_TEMP, THROTTLE)
+
+    /** Polled every N cycles (N = profile.tier2Every). */
+    val TIER2 = listOf(OIL_TEMP, CVT_TEMP, ENGINE_LOAD, VOLTAGE, INTAKE_TEMP)
+
+    /** Polled every M cycles (M = profile.tier3Every). */
+    val TIER3 = listOf(MAF, MAP, FUEL_TRIM_ST, FUEL_TRIM_LT, AMBIENT_TEMP, FUEL_LEVEL, AWD_DUTY, REL_THROTTLE, ABS_LOAD)
+
+    /** Polled every K cycles (K = profile.tier4Every) — slow-changing values. */
+    val TIER4 = listOf(TPMS_FL, TPMS_FR, TPMS_RL, TPMS_RR, RUN_TIME)
 }

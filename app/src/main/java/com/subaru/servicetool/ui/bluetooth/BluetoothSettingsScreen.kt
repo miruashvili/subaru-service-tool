@@ -54,6 +54,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.subaru.servicetool.data.bluetooth.BluetoothConnectionState
 import com.subaru.servicetool.data.bluetooth.OBDConnectionType
+import com.subaru.servicetool.data.obd.AdapterSpeedProfile
 import com.subaru.servicetool.ui.theme.DarkError
 import com.subaru.servicetool.ui.theme.DarkPrimary
 import com.subaru.servicetool.ui.theme.DarkSuccess
@@ -65,12 +66,13 @@ fun BluetoothSettingsScreen(
     onBack: () -> Unit,
     viewModel: BluetoothSettingsViewModel = hiltViewModel(),
 ) {
-    val connectionState by viewModel.connectionState.collectAsState()
-    val pairedDevices by viewModel.pairedDevices.collectAsState()
-    val scanResults by viewModel.scanResults.collectAsState()
-    val isScanning by viewModel.isScanning.collectAsState()
-    val connectedMac = viewModel.connectedMac()
-    val context = LocalContext.current
+    val connectionState  by viewModel.connectionState.collectAsState()
+    val adapterProfile   by viewModel.adapterSpeedProfile.collectAsState()
+    val pairedDevices    by viewModel.pairedDevices.collectAsState()
+    val scanResults      by viewModel.scanResults.collectAsState()
+    val isScanning       by viewModel.isScanning.collectAsState()
+    val connectedMac     = viewModel.connectedMac()
+    val context          = LocalContext.current
 
     var permissionsGranted by remember { mutableStateOf(false) }
     var permissionPermanentlyDenied by remember { mutableStateOf(false) }
@@ -111,7 +113,7 @@ fun BluetoothSettingsScreen(
         ) {
             // ── Connection status banner ─────────────────────────────────────
             item {
-                ConnectionStatusBanner(connectionState) { viewModel.disconnect() }
+                ConnectionStatusBanner(connectionState, adapterProfile) { viewModel.disconnect() }
                 Spacer(Modifier.height(8.dp))
             }
 
@@ -239,6 +241,7 @@ fun BluetoothSettingsScreen(
 @Composable
 private fun ConnectionStatusBanner(
     state: BluetoothConnectionState,
+    adapterProfile: AdapterSpeedProfile,
     onDisconnect: () -> Unit,
 ) {
     val (bg, label, showDisconnect) = when (state) {
@@ -255,39 +258,47 @@ private fun ConnectionStatusBanner(
     }
 
     Surface(color = bg, shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = Icons.Filled.Bluetooth,
-                contentDescription = null,
-                tint = when (state) {
-                    is BluetoothConnectionState.Connected -> DarkSuccess
-                    is BluetoothConnectionState.Connecting,
-                    is BluetoothConnectionState.Reconnecting -> DarkWarning
-                    is BluetoothConnectionState.Error -> DarkError
-                    else -> MaterialTheme.colorScheme.onSurface.copy(0.4f)
-                },
-                modifier = Modifier.size(20.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-            Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
-            if (state is BluetoothConnectionState.Connecting ||
-                state is BluetoothConnectionState.Reconnecting) {
-                CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-            }
-            if (showDisconnect) {
-                Spacer(Modifier.width(8.dp))
-                OutlinedButton(
-                    onClick = onDisconnect,
-                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
-                    modifier = Modifier.height(32.dp),
-                ) {
-                    Icon(Icons.Filled.LinkOff, contentDescription = null, modifier = Modifier.size(14.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Disconnect", style = MaterialTheme.typography.labelSmall)
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Filled.Bluetooth,
+                    contentDescription = null,
+                    tint = when (state) {
+                        is BluetoothConnectionState.Connected -> DarkSuccess
+                        is BluetoothConnectionState.Connecting,
+                        is BluetoothConnectionState.Reconnecting -> DarkWarning
+                        is BluetoothConnectionState.Error -> DarkError
+                        else -> MaterialTheme.colorScheme.onSurface.copy(0.4f)
+                    },
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(Modifier.width(10.dp))
+                Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                if (state is BluetoothConnectionState.Connecting ||
+                    state is BluetoothConnectionState.Reconnecting) {
+                    CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                 }
+                if (showDisconnect) {
+                    Spacer(Modifier.width(8.dp))
+                    OutlinedButton(
+                        onClick = onDisconnect,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 0.dp),
+                        modifier = Modifier.height(32.dp),
+                    ) {
+                        Icon(Icons.Filled.LinkOff, contentDescription = null, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Disconnect", style = MaterialTheme.typography.labelSmall)
+                    }
+                }
+            }
+            if (state is BluetoothConnectionState.Connected) {
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "Adapter speed: ${adapterProfile.label}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurface.copy(0.55f),
+                    modifier = Modifier.padding(start = 30.dp),
+                )
             }
         }
     }

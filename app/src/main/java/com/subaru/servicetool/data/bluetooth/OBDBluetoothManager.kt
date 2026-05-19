@@ -13,12 +13,14 @@ import android.os.Build
 import android.util.Log
 import com.subaru.servicetool.data.preferences.UserPreferences
 import dagger.hilt.android.qualifiers.ApplicationContext
+import com.subaru.servicetool.data.obd.AdapterSpeedProfile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -67,12 +69,16 @@ class OBDBluetoothManager @Inject constructor(
     private val _incomingData = MutableSharedFlow<String>(extraBufferCapacity = 64)
     val incomingData: SharedFlow<String> = _incomingData.asSharedFlow()
 
+    private val _adapterSpeedProfile = MutableStateFlow(AdapterSpeedProfile.MEDIUM)
+    val adapterSpeedProfile: StateFlow<AdapterSpeedProfile> = _adapterSpeedProfile.asStateFlow()
+
     // ── Internal ──────────────────────────────────────────────────────────────
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val connectionLock = AtomicBoolean(false)
     private val commandMutex = Mutex()
     private val commandActive = AtomicBoolean(false)
     private val cmdResponseChannel = Channel<String>(Channel.CONFLATED)
+    @Volatile private var lastWriteMs = 0L
 
     var lastDeviceMac: String? = null; private set
     var lastConnectionType: OBDConnectionType? = null; private set
@@ -184,15 +190,19 @@ class OBDBluetoothManager @Inject constructor(
         }
     }
 
-    /** Sends a command and waits up to 5 s for a '>' terminated response. Null on timeout. */
-    suspend fun sendCommand(command: String): String? {
+    /** Sends a command and waits up to [timeoutMs] for a '>' terminated response. Null on timeout. */
+    suspend fun sendCommand(command: String, timeoutMs: Long = 5_000L): String? {
         if (_state.value !is BluetoothConnectionState.Connected) return null
         return commandMutex.withLock {
+            // Enforce minimum 15 ms between hardware writes
+            val elapsed = System.currentTimeMillis() - lastWriteMs
+            if (elapsed < 15L) delay(15L - elapsed)
             commandActive.set(true)
             bleBuffer.clear()
             try {
                 writeToAdapter("$command\r")
-                withTimeoutOrNull(5_000L) { cmdResponseChannel.receive() }
+                lastWriteMs = System.currentTimeMillis()
+                withTimeoutOrNull(timeoutMs) { cmdResponseChannel.receive() }
             } finally {
                 commandActive.set(false)
             }
@@ -257,11 +267,15 @@ class OBDBluetoothManager @Inject constructor(
 
         startKeepAlive()
 
-        // Suspend here, routing data and watching for disconnect
         try {
-            monitorBleEvents()
+            coroutineScope {
+                val monitorJob = launch { monitorBleEvents() }
+                delay(100)
+                runBenchmark()
+                monitorJob.join()
+            }
         } catch (e: CancellationException) {
-            throw e // Explicit disconnect() — do not reconnect
+            throw e
         }
         handleDisconnect(null)
     }
@@ -377,9 +391,18 @@ class OBDBluetoothManager @Inject constructor(
         Log.i(TAG, "SPP ready: $name")
 
         startKeepAlive()
-        sppReadLoop(socket)
 
-        // Check for cancellation before scheduling reconnect
+        try {
+            coroutineScope {
+                val readJob = launch { sppReadLoop(socket) }
+                delay(100)
+                runBenchmark()
+                readJob.join()
+            }
+        } catch (e: CancellationException) {
+            throw e
+        }
+
         currentCoroutineContext().ensureActive()
         handleDisconnect(null)
     }
@@ -410,7 +433,7 @@ class OBDBluetoothManager @Inject constructor(
         keepAliveJob?.cancel()
         keepAliveJob = scope.launch {
             while (_state.value is BluetoothConnectionState.Connected) {
-                delay(KEEP_ALIVE_INTERVAL_MS)
+                delay(_adapterSpeedProfile.value.keepAliveIntervalMs)
                 if (_state.value !is BluetoothConnectionState.Connected) break
                 // Only send if no user command is in flight
                 if (!commandMutex.isLocked) {
@@ -547,6 +570,51 @@ class OBDBluetoothManager @Inject constructor(
             }
             result
         }
+
+    // ── Benchmark & adaptive speed ────────────────────────────────────────────
+
+    private suspend fun runBenchmark() {
+        val times = mutableListOf<Long>()
+        repeat(3) {
+            val start = System.currentTimeMillis()
+            if (sendCommand("0100", 2_000L) != null) {
+                times.add(System.currentTimeMillis() - start)
+            }
+            delay(50)
+        }
+        if (times.isEmpty()) return
+        val avgRtt = times.average()
+        _adapterSpeedProfile.value = when {
+            avgRtt < 50.0  -> AdapterSpeedProfile.FAST
+            avgRtt < 120.0 -> AdapterSpeedProfile.MEDIUM
+            avgRtt < 250.0 -> AdapterSpeedProfile.SLOW
+            else            -> AdapterSpeedProfile.MINIMAL
+        }
+        Log.i(TAG, "Benchmark: avgRtt=${avgRtt.toInt()}ms → ${_adapterSpeedProfile.value.label}")
+    }
+
+    /** Re-sends the ELM327 init sequence after catastrophic timeout failure. */
+    suspend fun reinitializeElm327() {
+        if (_state.value !is BluetoothConnectionState.Connected) return
+        commandMutex.withLock {
+            bleBuffer.clear()
+            for ((cmd, waitMs) in ELM327_INIT) {
+                writeToAdapter(cmd)
+                delay(waitMs)
+            }
+            Log.i(TAG, "ELM327 reinitialized")
+        }
+    }
+
+    fun downgradeProfile() {
+        _adapterSpeedProfile.value = _adapterSpeedProfile.value.downgrade()
+        Log.i(TAG, "Profile downgraded to ${_adapterSpeedProfile.value.label}")
+    }
+
+    fun upgradeProfile() {
+        _adapterSpeedProfile.value = _adapterSpeedProfile.value.upgrade()
+        Log.i(TAG, "Profile upgraded to ${_adapterSpeedProfile.value.label}")
+    }
 
     // ── GATT Callback ─────────────────────────────────────────────────────────
 

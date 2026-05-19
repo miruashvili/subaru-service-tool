@@ -16,6 +16,7 @@ import com.subaru.servicetool.data.bluetooth.BleUuids
 import com.subaru.servicetool.data.bluetooth.BluetoothConnectionState
 import com.subaru.servicetool.data.bluetooth.OBDBluetoothManager
 import com.subaru.servicetool.data.bluetooth.OBDConnectionType
+import com.subaru.servicetool.data.obd.AdapterSpeedProfile
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.compose.runtime.getValue
@@ -43,6 +44,7 @@ class BluetoothSettingsViewModel @Inject constructor(
 ) : ViewModel() {
 
     val connectionState: StateFlow<BluetoothConnectionState> = obdManager.connectionState
+    val adapterSpeedProfile: StateFlow<AdapterSpeedProfile> = obdManager.adapterSpeedProfile
 
     var connectingAddress by mutableStateOf<String?>(null)
         private set

@@ -40,6 +40,9 @@ class SettingsViewModel @Inject constructor(
     val landscapeBottomLayout: StateFlow<String> = userPreferences.landscapeBottomLayout
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "wide")
 
+    val lsBotMode: StateFlow<String> = userPreferences.lsBotMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "square")
+
     val language: StateFlow<String> = userPreferences.language
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), "")
 
@@ -65,6 +68,10 @@ class SettingsViewModel @Inject constructor(
 
     fun setLandscapeBottomLayout(layout: String) {
         viewModelScope.launch { userPreferences.setLandscapeBottomLayout(layout) }
+    }
+
+    fun setLsBotMode(mode: String) {
+        viewModelScope.launch { userPreferences.setLsBotMode(mode) }
     }
 
     fun setLanguage(tag: String) {

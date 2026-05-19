@@ -49,6 +49,8 @@ import androidx.compose.material.icons.filled.Compress
 import androidx.compose.material.icons.filled.DeviceThermostat
 import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.ViewStream
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LinkOff
@@ -299,33 +301,49 @@ fun DashboardScreen(
                 }
 
                 // Row 3: bottom section (~40%) — square or wide mode
-                Row(
+                Box(
                     modifier = Modifier
                         .weight(0.4f)
                         .fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
-                    if (lsBotMode == "square") {
-                        for (i in 0..3) {
-                            MetricCard(
-                                metric         = lsBotMetrics.getOrElse(i) { lsBotMetrics.firstOrNull() ?: return@Row },
-                                onEdit         = { viewModel.openLsBotEditor(i) },
-                                modifier       = Modifier.weight(1f),
-                                useAspectRatio = false,
-                                valueFontSize  = gaugeValueSp,
-                                labelFontSize  = gaugeLabelSp,
-                            )
+                    Row(
+                        modifier = Modifier.fillMaxSize(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        if (lsBotMode == "square") {
+                            for (i in 0..3) {
+                                MetricCard(
+                                    metric         = lsBotMetrics.getOrElse(i) { lsBotMetrics.firstOrNull() ?: return@Row },
+                                    onEdit         = { viewModel.openLsBotEditor(i) },
+                                    modifier       = Modifier.weight(1f),
+                                    useAspectRatio = false,
+                                    valueFontSize  = gaugeValueSp,
+                                    labelFontSize  = gaugeLabelSp,
+                                )
+                            }
+                        } else {
+                            for (i in 0..1) {
+                                LandscapeBotWideCard(
+                                    cmd      = lsBotWideSlotCmds.getOrElse(i) { "221018" },
+                                    metric   = lsBotWideMetrics.getOrNull(i),
+                                    state    = state,
+                                    onEdit   = { viewModel.openLsBotWideEditor(i) },
+                                    modifier = Modifier.weight(1f).fillMaxHeight(),
+                                )
+                            }
                         }
-                    } else {
-                        for (i in 0..1) {
-                            LandscapeBotWideCard(
-                                cmd      = lsBotWideSlotCmds.getOrElse(i) { "221018" },
-                                metric   = lsBotWideMetrics.getOrNull(i),
-                                state    = state,
-                                onEdit   = { viewModel.openLsBotWideEditor(i) },
-                                modifier = Modifier.weight(1f).fillMaxHeight(),
-                            )
-                        }
+                    }
+                    // Layout toggle button — bottom-left corner of Row 3
+                    IconButton(
+                        onClick  = viewModel::toggleLsBotMode,
+                        modifier = Modifier.align(Alignment.BottomStart).size(28.dp),
+                    ) {
+                        Icon(
+                            imageVector        = if (lsBotMode == "square") Icons.Filled.ViewStream else Icons.Filled.GridView,
+                            contentDescription = "Toggle layout",
+                            tint               = MaterialTheme.colorScheme.onSurface.copy(0.3f),
+                            modifier           = Modifier.size(15.dp),
+                        )
                     }
                 }
             }

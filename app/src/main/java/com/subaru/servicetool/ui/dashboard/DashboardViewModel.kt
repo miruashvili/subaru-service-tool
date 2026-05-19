@@ -324,6 +324,12 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch { userPreferences.setLsBotWideSlot(slot, cmd) }
     }
 
+    fun toggleLsBotMode() {
+        viewModelScope.launch {
+            userPreferences.setLsBotMode(if (lsBotMode.value == "square") "wide" else "square")
+        }
+    }
+
     private fun computeFuelConsumption(values: Map<String, Float>, units: DisplayUnits): FuelConsumptionState {
         val maf   = values[ObdPids.MAF.cmd]
         val speed = values[ObdPids.SPEED.cmd]

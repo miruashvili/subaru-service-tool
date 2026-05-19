@@ -66,6 +66,7 @@ fun SettingsScreen(
     val pressUnit     by viewModel.pressureUnit.collectAsState()
     val fuelUnit      by viewModel.fuelUnit.collectAsState()
     val lsBottomLayout by viewModel.landscapeBottomLayout.collectAsState()
+    val lsBotMode      by viewModel.lsBotMode.collectAsState()
     val language      by viewModel.language.collectAsState()
     val context       = LocalContext.current
 
@@ -160,11 +161,11 @@ fun SettingsScreen(
             SettingsRowLabel(stringResource(R.string.settings_landscape_bottom))
             Spacer(Modifier.height(8.dp))
             SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                listOf("wide" to stringResource(R.string.settings_landscape_bottom_wide),
-                       "square" to stringResource(R.string.settings_landscape_bottom_square)).forEachIndexed { i, (key, label) ->
+                listOf("square" to stringResource(R.string.settings_landscape_bottom_square),
+                       "wide"   to stringResource(R.string.settings_landscape_bottom_wide)).forEachIndexed { i, (key, label) ->
                     SegmentedButton(
-                        selected = lsBottomLayout == key,
-                        onClick  = { viewModel.setLandscapeBottomLayout(key) },
+                        selected = lsBotMode == key,
+                        onClick  = { viewModel.setLsBotMode(key) },
                         shape    = SegmentedButtonDefaults.itemShape(i, 2),
                         label    = { Text(label, style = MaterialTheme.typography.labelMedium) },
                     )

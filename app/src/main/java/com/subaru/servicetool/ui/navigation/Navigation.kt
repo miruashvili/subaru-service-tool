@@ -53,7 +53,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -237,28 +239,28 @@ private fun LandscapeNavPill(
                     )
                 }
             }
-            ambientTemp?.let { temp ->
-                Spacer(Modifier.height(4.dp))
-                HorizontalDivider(modifier = Modifier.width(28.dp), color = MaterialTheme.colorScheme.onSurface.copy(0.12f))
-                Spacer(Modifier.height(4.dp))
-                Icon(
-                    imageVector        = Icons.Filled.DeviceThermostat,
-                    contentDescription = null,
-                    modifier           = Modifier.size(14.dp),
-                    tint               = when {
-                        temp > 35f -> DarkError
-                        temp > 25f -> DarkWarning
-                        temp < 5f  -> DarkPrimary
-                        else       -> DarkSuccess
-                    },
-                )
-                Text(
-                    text  = "%.0f°".format(temp),
-                    fontSize = 11.sp,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    style = MaterialTheme.typography.labelSmall,
-                )
+            Spacer(Modifier.height(4.dp))
+            HorizontalDivider(modifier = Modifier.width(28.dp), color = MaterialTheme.colorScheme.onSurface.copy(0.12f))
+            Spacer(Modifier.height(4.dp))
+            val tempColor = when {
+                ambientTemp == null -> MaterialTheme.colorScheme.onSurface.copy(0.35f)
+                ambientTemp < 0f    -> Color(0xFF4488FF)
+                ambientTemp > 30f   -> Color(0xFFFF8800)
+                else                -> Color.White
             }
+            Icon(
+                imageVector        = Icons.Filled.DeviceThermostat,
+                contentDescription = null,
+                modifier           = Modifier.size(14.dp),
+                tint               = tempColor,
+            )
+            Text(
+                text       = ambientTemp?.let { "%.0f°".format(it) } ?: "--°",
+                fontSize   = 14.sp,
+                fontWeight = FontWeight.Bold,
+                color      = tempColor,
+                style      = MaterialTheme.typography.labelSmall,
+            )
         }
     }
 }

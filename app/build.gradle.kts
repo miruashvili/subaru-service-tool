@@ -69,6 +69,7 @@ dependencies {
     ksp(libs.hilt.compiler)
     implementation(libs.hilt.navigation.compose)
     implementation(libs.androidx.datastore.preferences)
+    implementation(libs.androidx.car.app)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

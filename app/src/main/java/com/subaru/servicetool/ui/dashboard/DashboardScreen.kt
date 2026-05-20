@@ -317,7 +317,7 @@ fun DashboardScreen(
                         } else {
                             for (i in 0..1) {
                                 LandscapeBotWideCard(
-                                    cmd      = lsBotWideSlotCmds.getOrElse(i) { "221018" },
+                                    cmd      = lsBotWideSlotCmds.getOrElse(i) { "221065" },
                                     metric   = lsBotWideMetrics.getOrNull(i),
                                     state    = state,
                                     onEdit   = { viewModel.openLsBotWideEditor(i) },

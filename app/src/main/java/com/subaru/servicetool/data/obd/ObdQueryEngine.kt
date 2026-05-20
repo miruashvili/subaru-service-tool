@@ -263,7 +263,6 @@ class ObdQueryEngine @Inject constructor(
     // ── Query helpers ─────────────────────────────────────────────────────────
 
     private fun parsePid(pid: ObdPid, response: String): Float? = when {
-        pid.cmd == "ATRV"        -> ObdParser.parseVoltage(response)
         pid.cmd.startsWith("22") -> ObdParser.parseUdsResponse(response, pid.cmd)?.let { pid.parse(it) }
         else                     -> ObdParser.parseStandard(response, pid.cmd)?.let { pid.parse(it) }
     }
@@ -283,8 +282,9 @@ class ObdQueryEngine @Inject constructor(
             val errors = (consecutiveErrors[pid.cmd] ?: 0) + 1
             consecutiveErrors[pid.cmd] = errors
             if (errors >= 3) {
-                Log.d(TAG, "Skipping ${pid.name} for 10 cycles after 3 consecutive parse errors")
-                skipCycles[pid.cmd] = 10
+                val skipFor = if (pid.header == "7E1") 20 else 10
+                Log.d(TAG, "Skipping ${pid.name} for $skipFor cycles after 3 consecutive parse errors")
+                skipCycles[pid.cmd] = skipFor
             }
         }
     }

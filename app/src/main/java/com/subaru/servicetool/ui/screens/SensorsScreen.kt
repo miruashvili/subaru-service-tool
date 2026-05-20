@@ -36,6 +36,7 @@ import androidx.compose.material.icons.filled.BatteryFull
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DeviceThermostat
+import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.Speed
@@ -211,10 +212,11 @@ private fun SectionHeader(label: String, group: PidGroup) {
 
 @Composable
 private fun PidGroup.localizedLabel(): String = when (this) {
-    PidGroup.ENGINE      -> stringResource(R.string.group_engine)
-    PidGroup.TEMPERATURE -> stringResource(R.string.group_temperatures)
-    PidGroup.FUEL        -> stringResource(R.string.group_fuel)
-    PidGroup.MISC        -> stringResource(R.string.group_misc)
+    PidGroup.ENGINE       -> stringResource(R.string.group_engine)
+    PidGroup.TEMPERATURE  -> stringResource(R.string.group_temperatures)
+    PidGroup.FUEL         -> stringResource(R.string.group_fuel)
+    PidGroup.MISC         -> stringResource(R.string.group_misc)
+    PidGroup.TRANSMISSION -> stringResource(R.string.group_transmission)
 }
 
 // ── Sensor group card ─────────────────────────────────────────────────────────
@@ -312,10 +314,11 @@ private fun ObdPid.localizedName(): String = when (cmd) {
 
 private val PidGroup.icon: ImageVector
     get() = when (this) {
-        PidGroup.ENGINE      -> Icons.Filled.Speed
-        PidGroup.TEMPERATURE -> Icons.Filled.DeviceThermostat
-        PidGroup.FUEL        -> Icons.Filled.LocalGasStation
-        PidGroup.MISC        -> Icons.Filled.BatteryFull
+        PidGroup.ENGINE       -> Icons.Filled.Speed
+        PidGroup.TEMPERATURE  -> Icons.Filled.DeviceThermostat
+        PidGroup.FUEL         -> Icons.Filled.LocalGasStation
+        PidGroup.MISC         -> Icons.Filled.BatteryFull
+        PidGroup.TRANSMISSION -> Icons.Filled.DirectionsCar
     }
 
 // ── Shimmer skeleton ──────────────────────────────────────────────────────────

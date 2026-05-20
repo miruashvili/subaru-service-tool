@@ -31,6 +31,7 @@
     <string name="group_temperatures">TEMPERATURES</string>
     <string name="group_fuel">FUEL</string>
     <string name="group_misc">MISC</string>
+    <string name="group_transmission">TRANSMISSION</string>
 
     <!-- Connection status -->
     <string name="status_connected_no_faults">Connected · No fault codes</string>
@@ -194,6 +195,22 @@
     <!-- New sensors -->
     <string name="sensor_ambient_temp">Ambient Air Temp</string>
     <string name="sensor_oil_pressure">Oil Pressure</string>
+    <string name="sensor_battery_temp">Battery Temperature</string>
+    <string name="sensor_radiator_fan">Radiator Fan Control</string>
+    <string name="sensor_knock_correction">Knock Correction</string>
+    <string name="sensor_wastegate">Wastegate Control</string>
+    <string name="sensor_throttle_motor">Throttle Motor Duty</string>
+    <string name="sensor_alternator_duty">Alternator Duty</string>
+    <string name="sensor_fuel_pump">Fuel Pump Duty</string>
+    <string name="sensor_vvt_left">VVT Advance L</string>
+    <string name="sensor_vvt_right">VVT Advance R</string>
+    <string name="sensor_cvt_gear_ratio">CVT Gear Ratio</string>
+    <string name="sensor_cvt_target_ratio">CVT Target Ratio</string>
+    <string name="sensor_primary_pulley">Primary Pulley Speed</string>
+    <string name="sensor_secondary_pulley">Secondary Pulley Speed</string>
+    <string name="sensor_turbine_rpm">Turbine Revolution</string>
+    <string name="sensor_lockup_duty">CVT Lock-Up Duty</string>
+    <string name="sensor_o2_voltage">O2 Sensor Voltage</string>
 
     <!-- Fuel consumption card -->
     <string name="fuel_title">Fuel Consumption</string>

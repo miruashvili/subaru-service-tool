@@ -94,11 +94,12 @@ class SensorsViewModel @Inject constructor(
     }
 
     private fun formatValue(v: Float, unit: String): String = when (unit) {
-        "rpm" -> "%,.0f".format(v)
-        "V"   -> "%.1f".format(v)
-        "g/s" -> "%.2f".format(v)
-        "s"   -> formatRunTime(v)
-        else  -> "%.1f".format(v)
+        "rpm"   -> "%,.0f".format(v)
+        "V"     -> "%.2f".format(v)
+        "g/s"   -> "%.2f".format(v)
+        "s"     -> formatRunTime(v)
+        "ratio" -> "%.2f".format(v)
+        else    -> "%.1f".format(v)
     }
 
     private fun formatRunTime(s: Float): String {
@@ -113,8 +114,9 @@ class SensorsViewModel @Inject constructor(
 
 private val PidGroup.displayLabel
     get() = when (this) {
-        PidGroup.ENGINE      -> "ENGINE"
-        PidGroup.TEMPERATURE -> "TEMPERATURES"
-        PidGroup.FUEL        -> "FUEL"
-        PidGroup.MISC        -> "MISC"
+        PidGroup.ENGINE       -> "ENGINE"
+        PidGroup.TEMPERATURE  -> "TEMPERATURES"
+        PidGroup.FUEL         -> "FUEL"
+        PidGroup.MISC         -> "MISC"
+        PidGroup.TRANSMISSION -> "TRANSMISSION"
     }

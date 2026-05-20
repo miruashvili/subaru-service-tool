@@ -37,7 +37,7 @@ object ObdParser {
      * Parses a UDS Mode-22 response where the DID may be longer than 2 hex chars.
      * Works for any cmd of the form "22XXYY..." (mode=22, DID = remaining hex pairs).
      * E.g. "221017" → looks for "62 10 17 <data>", returns data bytes.
-     *      "22A800000113" → looks for "62 A8 00 00 01 13 <data>".
+     *      "2230DA"  → looks for "62 30 DA <data>".
      */
     fun parseUdsResponse(response: String, cmd: String): List<Int>? {
         if (cmd.length < 6) return null
@@ -56,7 +56,8 @@ object ObdParser {
     }
 
     /**
-     * Parses a battery voltage response from ATRV (e.g. "14.2V >").
+     * Parses a battery voltage response from the ATRV AT command (e.g. "14.2V >").
+     * Not used in normal polling; kept for diagnostic / fallback use.
      */
     fun parseVoltage(response: String): Float? =
         "(\\d{1,2}\\.\\d{1,2})".toRegex().find(response)?.value?.toFloatOrNull()

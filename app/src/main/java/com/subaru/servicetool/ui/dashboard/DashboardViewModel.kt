@@ -151,7 +151,7 @@ class DashboardViewModel @Inject constructor(
     }
 
     private val defaultSlots     = listOf("0105", "221017", "010C", "010D")
-    private val defaultWideSlots = listOf("221018", "01C1")
+    private val defaultWideSlots = listOf("221065", "01C1")
 
     val uiState: StateFlow<DashboardUiState> = combine(
         selectedVehicle,
@@ -220,13 +220,13 @@ class DashboardViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf("0105", "221017", "010C", "010D"))
 
     val lsMidSlotCmds: StateFlow<List<String>> = userPreferences.lsMidSlots
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf("221018", "FUEL_CONS", "010D"))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf("221065", "FUEL_CONS", "010D"))
 
     val lsBotSlotCmds: StateFlow<List<String>> = userPreferences.lsBotSlots
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf("0104", "010C", "ATRV", "221017"))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf("0104", "010C", "0142", "221017"))
 
     val lsBotWideSlotCmds: StateFlow<List<String>> = userPreferences.lsBotWideSlots
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf("TPMS_ALL", "221018"))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf("TPMS_ALL", "221065"))
 
     val lsTopMetrics: StateFlow<List<LiveMetric>> = combine(
         userPreferences.lsTopSlots,
@@ -462,7 +462,7 @@ class DashboardViewModel @Inject constructor(
     val currentGaugeSlots: StateFlow<List<String>> = gaugeSlots
 
     val currentWideGaugeSlots: StateFlow<List<String>> = userPreferences.wideGaugeSlots
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf("221018", "01C1"))
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), listOf("221065", "01C1"))
 }
 
 // ── Extension helpers ─────────────────────────────────────────────────────────

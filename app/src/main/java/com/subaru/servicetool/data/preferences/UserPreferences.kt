@@ -211,7 +211,7 @@ class UserPreferences @Inject constructor(
 
     val wideGaugeSlots: Flow<List<String>> = dataStore.data.map { prefs ->
         listOf(
-            prefs[KEY_GAUGE_WIDE_0] ?: "221018",
+            prefs[KEY_GAUGE_WIDE_0] ?: "221065",
             prefs[KEY_GAUGE_WIDE_1] ?: "01C1",
         )
     }
@@ -271,7 +271,7 @@ class UserPreferences @Inject constructor(
 
     val lsMidSlots: Flow<List<String>> = dataStore.data.map { prefs ->
         listOf(
-            prefs[KEY_LS_MID_0] ?: "221018",   // AWD Distribution
+            prefs[KEY_LS_MID_0] ?: "221065",   // AWD Distribution
             prefs[KEY_LS_MID_1] ?: "FUEL_CONS", // Fuel Consumption
             prefs[KEY_LS_MID_2] ?: "010D",      // Vehicle Speed
         )
@@ -281,7 +281,7 @@ class UserPreferences @Inject constructor(
         listOf(
             prefs[KEY_LS_BOT_0] ?: "0104",   // Engine Load
             prefs[KEY_LS_BOT_1] ?: "010C",   // Engine RPM
-            prefs[KEY_LS_BOT_2] ?: "ATRV",   // Battery Voltage
+            prefs[KEY_LS_BOT_2] ?: "0142",   // Battery Voltage
             prefs[KEY_LS_BOT_3] ?: "221017", // CVT Fluid Temp
         )
     }
@@ -289,7 +289,7 @@ class UserPreferences @Inject constructor(
     val lsBotWideSlots: Flow<List<String>> = dataStore.data.map { prefs ->
         listOf(
             prefs[KEY_LS_BOT_WIDE_0] ?: "TPMS_ALL", // TPMS All Tires
-            prefs[KEY_LS_BOT_WIDE_1] ?: "221018",   // AWD Distribution
+            prefs[KEY_LS_BOT_WIDE_1] ?: "221065",   // AWD Distribution
         )
     }
 

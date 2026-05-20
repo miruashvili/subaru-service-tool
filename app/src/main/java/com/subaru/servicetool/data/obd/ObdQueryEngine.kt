@@ -18,7 +18,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "ObdQueryEngine"
-private const val TCU_READ_TIMEOUT_MS = 150L
+private const val TCU_READ_TIMEOUT_MS = 2000L
 
 @Singleton
 class ObdQueryEngine @Inject constructor(
@@ -98,7 +98,8 @@ class ObdQueryEngine @Inject constructor(
                 // ── Regular PIDs ──────────────────────────────────────────────
                 for (pid in regularPids) {
                     if (!isConnected()) break
-                    val response = btManager.sendCommand(pid.cmd, profile.commandTimeoutMs)
+                    val timeout = if (pid.cmd == ObdPids.OIL_TEMP.cmd) 2000L else profile.commandTimeoutMs
+                    val response = btManager.sendCommand(pid.cmd, timeout)
                     if (response == null) {
                         consecutiveTimeouts++
                         if (consecutiveTimeouts >= 5) {
@@ -108,7 +109,16 @@ class ObdQueryEngine @Inject constructor(
                         }
                     } else {
                         consecutiveTimeouts = 0
-                        trackResult(pid, parsePid(pid, response), current, consecutiveErrors, skipCycles)
+                        var value = parsePid(pid, response)
+                        // IAT fallback: some adapters return NO DATA for 010F — try 0168
+                        if (pid == ObdPids.INTAKE_TEMP && value == null && isConnected()) {
+                            val fallback = btManager.sendCommand("0168", profile.commandTimeoutMs)
+                            if (fallback != null) {
+                                value = ObdParser.parseStandard(fallback, "0168")
+                                    ?.let { bytes -> if (bytes.isNotEmpty()) (bytes[0] - 40).toFloat() else null }
+                            }
+                        }
+                        trackResult(pid, value, current, consecutiveErrors, skipCycles)
                     }
                     if (profile.delayBetweenPidsMs > 0L) delay(profile.delayBetweenPidsMs)
                 }
@@ -195,6 +205,12 @@ class ObdQueryEngine @Inject constructor(
         // MAF used for fuel consumption computation
         active += ObdPids.MAF
 
+        // Critical sensors always polled for dashboard widgets and temperature alerts
+        active += ObdPids.INTAKE_TEMP
+        active += ObdPids.OIL_TEMP
+        active += ObdPids.CVT_TEMP
+        active += ObdPids.AWD_DUTY
+
         // TPMS sentinel: if any slot shows the combined TPMS widget, include all 4 sensors
         if ("TPMS_ALL" in allCmds) active += ObdPids.TIER4
 
@@ -222,12 +238,17 @@ class ObdQueryEngine @Inject constructor(
             btManager.sendCommand("ATSH7E0", profile.commandTimeoutMs)
             return false
         }
+        delay(200) // adapter needs extra settling time after header switch
 
         var anyRead = false
         for (pid in pids) {
             if (!isConnected()) break
-            val response = btManager.sendCommand(pid.cmd, TCU_READ_TIMEOUT_MS)
-            if (response == null) break  // skip remaining TCU pids on timeout
+            var response = btManager.sendCommand(pid.cmd, TCU_READ_TIMEOUT_MS)
+            if (response == null) {
+                delay(500) // retry once after brief pause
+                response = btManager.sendCommand(pid.cmd, TCU_READ_TIMEOUT_MS)
+            }
+            if (response == null) continue // skip this pid, keep trying others
             val value = ObdParser.parseUdsResponse(response, pid.cmd)?.let { pid.parse(it) }
             trackResult(pid, value, current, consecutiveErrors, skipCycles)
             anyRead = true

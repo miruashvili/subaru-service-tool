@@ -50,7 +50,6 @@ import androidx.compose.material.icons.filled.DirectionsCar
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.ViewStream
-import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LinkOff
 import androidx.compose.material.icons.filled.LocalGasStation
@@ -379,7 +378,6 @@ fun DashboardScreen(
                         onReset = viewModel::resetFuelAvg,
                     )
                 }
-                DtcRow(dtcCount = state.dtcCount, connected = state.connectionState == ObdConnectionState.CONNECTED)
                 Spacer(Modifier.height(8.dp))
             }
         }
@@ -420,7 +418,6 @@ private fun DashboardTopBar(
     connectionState: ObdConnectionState,
     ambientTemp: Float?,
     connectedName: String?,
-    dtcCount: Int = 0,
     onNavigateToSport: () -> Unit = {},
 ) {
     Row(
@@ -432,23 +429,6 @@ private fun DashboardTopBar(
             style = MaterialTheme.typography.headlineMedium,
             modifier = Modifier.weight(1f),
         )
-
-        // DTC badge (shown when faults detected)
-        if (dtcCount > 0) {
-            Surface(
-                color = DarkError.copy(0.15f),
-                shape = RoundedCornerShape(12.dp),
-            ) {
-                Text(
-                    "$dtcCount DTC${if (dtcCount > 1) "s" else ""}",
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = DarkError,
-                    fontWeight = FontWeight.SemiBold,
-                )
-            }
-            Spacer(Modifier.width(8.dp))
-        }
 
         // Ambient temp chip
         ambientTemp?.let { temp ->
@@ -1045,38 +1025,6 @@ private fun FuelStatBox(label: String, value: String, modifier: Modifier = Modif
     }
 }
 
-// ── DTC fault-code row ────────────────────────────────────────────────────────
-
-@Composable
-private fun DtcRow(dtcCount: Int, connected: Boolean) {
-    Surface(
-        color = if (dtcCount == 0) DarkSuccess.copy(0.10f) else DarkError.copy(0.12f),
-        shape = RoundedCornerShape(12.dp),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(modifier = Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = if (dtcCount == 0) Icons.Filled.CheckCircle else Icons.Filled.ErrorOutline,
-                contentDescription = null,
-                tint = if (dtcCount == 0) DarkSuccess else DarkError,
-                modifier = Modifier.size(20.dp),
-            )
-            Spacer(Modifier.width(10.dp))
-            Column {
-                Text(
-                    text = if (!connected) "Connect OBD to scan for fault codes"
-                           else if (dtcCount == 0) "No fault codes detected"
-                           else "$dtcCount fault code(s) detected",
-                    style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium,
-                )
-                if (connected && dtcCount == 0) {
-                    Text("System nominal", style = MaterialTheme.typography.labelSmall, color = DarkSuccess.copy(0.8f))
-                }
-            }
-        }
-    }
-}
-
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 private fun metricIcon(icon: MetricIcon): ImageVector = when (icon) {
@@ -1161,6 +1109,14 @@ private fun AwdContent(rearDuty: Float, compact: Boolean = false) {
                     color = DarkWarning)
                 Text(rearLabel, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurface.copy(0.4f))
             }
+        }
+        if (rearPct == 0f) {
+            Spacer(Modifier.height(2.dp))
+            Text(
+                "FWD Mode (coasting)",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(0.45f),
+            )
         }
     }
 }

@@ -38,7 +38,7 @@ data class DtcResult(
 
 sealed interface DtcScanState {
     data object Idle : DtcScanState
-    data object Scanning : DtcScanState
+    data class Scanning(val message: String = "Reading fault codes…") : DtcScanState
     data object Clearing : DtcScanState
     data object NoCodes : DtcScanState
     data class Results(val codes: List<DtcResult>) : DtcScanState
@@ -221,13 +221,30 @@ class ServiceViewModel @Inject constructor(
     fun scanDtcs() {
         if (!isConnected()) { _dtcScanState.value = DtcScanState.Error("OBD adapter not connected"); return }
         viewModelScope.launch {
-            _dtcScanState.value = DtcScanState.Scanning
-            val response = btManager.sendCommand("03")
-            if (response == null) {
-                _dtcScanState.value = DtcScanState.Error("No response from adapter")
-                return@launch
-            }
-            val codes = ObdParser.parseDtcCodes(response)
+            val startTime = System.currentTimeMillis()
+
+            _dtcScanState.value = DtcScanState.Scanning("Connecting to ECU…")
+            delay(800)
+
+            _dtcScanState.value = DtcScanState.Scanning("Reading stored fault codes…")
+            val response03 = btManager.sendCommand("03", 5000L)
+
+            _dtcScanState.value = DtcScanState.Scanning("Reading pending fault codes…")
+            val response07 = btManager.sendCommand("07", 5000L)
+            val response0A = btManager.sendCommand("0A", 5000L)
+
+            _dtcScanState.value = DtcScanState.Scanning("Analysis complete")
+
+            // Ensure minimum 3-second scan so the user sees progress
+            val elapsed = System.currentTimeMillis() - startTime
+            if (elapsed < 3000L) delay(3000L - elapsed)
+
+            val allCodes = mutableListOf<String>()
+            if (response03 != null) allCodes += ObdParser.parseDtcCodes(response03)
+            if (response07 != null) allCodes += ObdParser.parseDtcCodes(response07)
+            if (response0A != null) allCodes += ObdParser.parseDtcCodes(response0A)
+            val codes = allCodes.distinct()
+
             activeDtcCodes.clear()
             activeDtcCodes.addAll(codes)
             if (codes.isEmpty()) {

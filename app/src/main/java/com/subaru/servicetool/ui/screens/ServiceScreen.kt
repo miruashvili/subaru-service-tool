@@ -868,12 +868,18 @@ private fun DiagnosticsCard(
                         color = MaterialTheme.colorScheme.onSurface.copy(0.45f),
                     )
                 }
-                is DtcScanState.Scanning, is DtcScanState.Clearing -> {
-                    val label = if (state is DtcScanState.Scanning) "Reading fault codes…" else "Clearing fault codes…"
+                is DtcScanState.Scanning -> {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.width(10.dp))
-                        Text(label, style = MaterialTheme.typography.bodySmall)
+                        Text(state.message, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+                is DtcScanState.Clearing -> {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(10.dp))
+                        Text("Clearing fault codes…", style = MaterialTheme.typography.bodySmall)
                     }
                 }
                 is DtcScanState.NoCodes -> {

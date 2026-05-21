@@ -117,6 +117,7 @@ object ObdPids {
     val WASTEGATE = ObdPid(
         cmd = "2210C9", name = "Wastegate Control", unit = "%",
         minVal = 0f, maxVal = 100f, group = PidGroup.ENGINE,
+        isTurboOnly = true,
     ) { b -> if (b.isNotEmpty()) b[0].toFloat() else null }
 
     val THROTTLE_MOTOR = ObdPid(

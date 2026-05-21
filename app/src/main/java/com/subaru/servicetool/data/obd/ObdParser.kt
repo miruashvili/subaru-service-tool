@@ -40,7 +40,7 @@ object ObdParser {
      *      "2230DA"  → looks for "62 30 DA <data>".
      */
     fun parseUdsResponse(response: String, cmd: String): List<Int>? {
-        if (cmd.length < 6) return null
+        if (cmd.length < 4) return null
         val mode = cmd.substring(0, 2).toIntOrNull(16) ?: return null
         val replyByte = (0x40 + mode).toString(16).uppercase().padStart(2, '0')
         val didTokens = cmd.substring(2).chunked(2).map { it.uppercase() }

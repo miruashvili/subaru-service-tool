@@ -80,6 +80,18 @@ object ObdPids {
         minVal = 0f, maxVal = 65535f, group = PidGroup.MISC,
     ) { b -> if (b.size >= 2) (b[0] * 256 + b[1]).toFloat() else null }
 
+    // Mode 01 PID 24 — O2 sensor equivalence ratio (bank 1, sensor 1) → stoich AFR for gasoline
+    val AFR = ObdPid(
+        cmd = "0124", name = "Air-Fuel Ratio", unit = "AFR",
+        minVal = 7f, maxVal = 22f, group = PidGroup.FUEL,
+    ) { b -> if (b.size >= 2) 2f * (b[0] * 256 + b[1]).toFloat() / 65535f * 14.7f else null }
+
+    // Mode 01 PID 33 — absolute barometric pressure; used to derive manifold boost
+    val BAROMETRIC_PRESS = ObdPid(
+        cmd = "0133", name = "Barometric Press", unit = "kPa",
+        minVal = 70f, maxVal = 110f, group = PidGroup.ENGINE,
+    ) { b -> if (b.isNotEmpty()) b[0].toFloat() else null }
+
     val REL_THROTTLE = ObdPid(
         cmd = "0145", name = "Rel. Throttle Pos", unit = "%",
         minVal = 0f, maxVal = 100f, group = PidGroup.ENGINE,
@@ -90,9 +102,16 @@ object ObdPids {
         minVal = 0f, maxVal = 25700f, group = PidGroup.ENGINE,
     ) { b -> if (b.size >= 2) (b[0] * 256 + b[1]).toFloat() / 2.55f else null }
 
-    // ── Subaru ECU SSM (Header: 7E0, Mode: 22) ───────────────────────────────
-    // Send "ATSH7E0" then "22XX\r". Response header: 62 XX YY <data>.
-    // ScanGauge-verified command codes.
+    // ── Subaru ECU SSM (Header: 7E0, Mode: 21/22) ────────────────────────────
+    // Init sets ATSH7E0; restored automatically after every non-ECM batch.
+    // Mode 21 request/response: 21 XX  →  61 XX <data>
+    // Mode 22 request/response: 22 XX YY  →  62 XX YY <data>
+
+    val ECM_COOLANT_TEMP = ObdPid(
+        cmd = "2101", name = "ECM Coolant Temp", unit = "°C",
+        minVal = -40f, maxVal = 215f, group = PidGroup.TEMPERATURE,
+        header = "7E0",
+    ) { b -> if (b.isNotEmpty()) (b[0] - 40).toFloat() else null }
 
     val OIL_TEMP = ObdPid(
         cmd = "2210AF", name = "Engine Oil Temp", unit = "°C",
@@ -109,10 +128,19 @@ object ObdPids {
         minVal = 0f, maxVal = 100f, group = PidGroup.MISC,
     ) { b -> if (b.isNotEmpty()) b[0].toFloat() else null }
 
+    // IAM / FBKC — Mode 21 DID 05 with header 7E0; equation: (A × 0.5) − 64
     val KNOCK_CORRECTION = ObdPid(
-        cmd = "223018", name = "Knock Correction", unit = "°",
-        minVal = -32f, maxVal = 32f, group = PidGroup.ENGINE,
-    ) { b -> if (b.isNotEmpty()) b[0].toFloat() * 0.25f - 32f else null }
+        cmd = "2105", name = "Knock Correction", unit = "°",
+        minVal = -64f, maxVal = 63.5f, group = PidGroup.ENGINE,
+        header = "7E0",
+    ) { b -> if (b.isNotEmpty()) b[0].toFloat() * 0.5f - 64f else null }
+
+    // Subaru SSM Mode 22 — exhaust gas temperature; equation: ((A×256)+B) × 0.1 − 40  (°C)
+    val EGT = ObdPid(
+        cmd = "221155", name = "Exhaust Gas Temp", unit = "°C",
+        minVal = -40f, maxVal = 1000f, group = PidGroup.TEMPERATURE,
+        header = "7E0",
+    ) { b -> if (b.size >= 2) (b[0] * 256 + b[1]).toFloat() * 0.1f - 40f else null }
 
     val WASTEGATE = ObdPid(
         cmd = "2210C9", name = "Wastegate Control", unit = "%",
@@ -134,90 +162,100 @@ object ObdPids {
         minVal = 0f, maxVal = 100f, group = PidGroup.FUEL,
     ) { b -> if (b.isNotEmpty()) b[0].toFloat() * 100f / 255f else null }
 
+    // VVT advance angles — equation: A − 50 (°)
     val VVT_LEFT = ObdPid(
-        cmd = "2210B9", name = "VVT Advance L", unit = "°",
-        minVal = 0f, maxVal = 127.5f, group = PidGroup.ENGINE,
-    ) { b -> if (b.isNotEmpty()) b[0].toFloat() * 0.5f else null }
+        cmd = "221124", name = "VVT Advance L", unit = "°",
+        minVal = -50f, maxVal = 80f, group = PidGroup.ENGINE,
+    ) { b -> if (b.isNotEmpty()) (b[0] - 50).toFloat() else null }
 
     val VVT_RIGHT = ObdPid(
-        cmd = "221099", name = "VVT Advance R", unit = "°",
-        minVal = 0f, maxVal = 127.5f, group = PidGroup.ENGINE,
-    ) { b -> if (b.isNotEmpty()) b[0].toFloat() * 0.5f else null }
+        cmd = "221125", name = "VVT Advance R", unit = "°",
+        minVal = -50f, maxVal = 80f, group = PidGroup.ENGINE,
+    ) { b -> if (b.isNotEmpty()) (b[0] - 50).toFloat() else null }
 
-    // ── Subaru TCU SSM (Header: 7E1, Mode: 22) ───────────────────────────────
-    // Must call "ATSH7E1" before this batch and "ATSH7E0" after.
-    // Responses arrive from 7E9. ScanGauge-verified command codes.
+    // ── Subaru TCU SSM (Header: 7E1, Mode: 21/22) ────────────────────────────
+    // Engine sends ATSH7E1 before batch, restores ATSH7E0 after.
+    // Mode 21 responses arrive from 7E9.
 
     val CVT_TEMP = ObdPid(
-        cmd = "221017", name = "CVT Fluid Temp", unit = "°C",
+        cmd = "2184", name = "CVT Fluid Temp", unit = "°C",
         minVal = -40f, maxVal = 215f, group = PidGroup.TEMPERATURE,
         header = "7E1",
     ) { b -> if (b.isNotEmpty()) (b[0] - 40).toFloat() else null }
 
-    // 0 % = FWD coast, >0 % = AWD engaged
+    // 0 % = FWD coast, >0 % = AWD engaged — equation: A / 2.55
     val AWD_DUTY = ObdPid(
-        cmd = "221065", name = "AWD Transfer Duty", unit = "%",
+        cmd = "2122", name = "AWD Transfer Duty", unit = "%",
         minVal = 0f, maxVal = 100f, group = PidGroup.TRANSMISSION,
         header = "7E1",
-    ) { b -> if (b.isNotEmpty()) b[0].toFloat() * 100f / 255f else null }
+    ) { b -> if (b.isNotEmpty()) b[0].toFloat() / 2.55f else null }
 
     val LOCKUP_DUTY = ObdPid(
-        cmd = "221045", name = "CVT Lock-Up Duty", unit = "%",
+        cmd = "2123", name = "CVT Lock-Up Duty", unit = "%",
         minVal = 0f, maxVal = 100f, group = PidGroup.TRANSMISSION,
         header = "7E1",
-    ) { b -> if (b.isNotEmpty()) b[0].toFloat() * 100f / 255f else null }
+    ) { b -> if (b.isNotEmpty()) b[0].toFloat() / 2.55f else null }
 
+    // CVT actual gear ratio — equation: ((A × 256) + B) / 1000
     val CVT_RATIO_ACTUAL = ObdPid(
-        cmd = "2230DA", name = "CVT Gear Ratio", unit = "ratio",
+        cmd = "2140", name = "CVT Gear Ratio", unit = "ratio",
         minVal = 0f, maxVal = 6f, group = PidGroup.TRANSMISSION,
         header = "7E1",
-    ) { b -> if (b.size >= 2) (b[0] * 256 + b[1]).toFloat() / 100f else null }
+    ) { b -> if (b.size >= 2) (b[0] * 256 + b[1]).toFloat() / 1000f else null }
 
+    // CVT target ratio — separate SSM address; same ratio scale
     val CVT_RATIO_TARGET = ObdPid(
         cmd = "2230F8", name = "CVT Target Ratio", unit = "ratio",
         minVal = 0f, maxVal = 6f, group = PidGroup.TRANSMISSION,
         header = "7E1",
-    ) { b -> if (b.size >= 2) (b[0] * 256 + b[1]).toFloat() / 100f else null }
+    ) { b -> if (b.size >= 2) (b[0] * 256 + b[1]).toFloat() / 1000f else null }
 
+    // Pulley and turbine speeds — equation: (A × 256) + B  (rpm)
     val PRIMARY_PULLEY_SPEED = ObdPid(
-        cmd = "22300E", name = "Primary Pulley Speed", unit = "rpm",
+        cmd = "2102", name = "Primary Pulley Speed", unit = "rpm",
         minVal = 0f, maxVal = 8000f, group = PidGroup.TRANSMISSION,
         header = "7E1",
     ) { b -> if (b.size >= 2) (b[0] * 256 + b[1]).toFloat() else null }
 
     val SECONDARY_PULLEY_SPEED = ObdPid(
-        cmd = "2230D0", name = "Secondary Pulley Speed", unit = "rpm",
+        cmd = "2103", name = "Secondary Pulley Speed", unit = "rpm",
         minVal = 0f, maxVal = 8000f, group = PidGroup.TRANSMISSION,
         header = "7E1",
     ) { b -> if (b.size >= 2) (b[0] * 256 + b[1]).toFloat() else null }
 
     val TURBINE_RPM = ObdPid(
-        cmd = "221067", name = "Turbine Revolution", unit = "rpm",
+        cmd = "2104", name = "Turbine Revolution", unit = "rpm",
         minVal = 0f, maxVal = 8000f, group = PidGroup.TRANSMISSION,
         header = "7E1",
-    ) { b -> if (b.size >= 2) (b[0] * 256 + b[1]).toFloat() * 32f else null }
+    ) { b -> if (b.size >= 2) (b[0] * 256 + b[1]).toFloat() else null }
 
-    // ── TPMS (non-standard extended PIDs) ────────────────────────────────────
+    // ── Body Control Module / TPMS (Header: 7D4, Mode: 22) ───────────────────
+    // ATSH7D4 set before batch; some model years may need 7E4 instead.
+    // Equation: ((A × 256) + B) / 10  (kPa)
 
     val TPMS_FL = ObdPid(
-        cmd = "01C1", name = "Tire Pressure FL", unit = "kPa",
+        cmd = "221501", name = "Tire Pressure FL", unit = "kPa",
         minVal = 0f, maxVal = 500f, group = PidGroup.MISC,
-    ) { b -> if (b.isNotEmpty()) b[0] * 3f else null }
+        header = "7D4",
+    ) { b -> if (b.size >= 2) (b[0] * 256 + b[1]).toFloat() / 10f else null }
 
     val TPMS_FR = ObdPid(
-        cmd = "01C2", name = "Tire Pressure FR", unit = "kPa",
+        cmd = "221502", name = "Tire Pressure FR", unit = "kPa",
         minVal = 0f, maxVal = 500f, group = PidGroup.MISC,
-    ) { b -> if (b.isNotEmpty()) b[0] * 3f else null }
+        header = "7D4",
+    ) { b -> if (b.size >= 2) (b[0] * 256 + b[1]).toFloat() / 10f else null }
 
     val TPMS_RL = ObdPid(
-        cmd = "01C3", name = "Tire Pressure RL", unit = "kPa",
+        cmd = "221503", name = "Tire Pressure RL", unit = "kPa",
         minVal = 0f, maxVal = 500f, group = PidGroup.MISC,
-    ) { b -> if (b.isNotEmpty()) b[0] * 3f else null }
+        header = "7D4",
+    ) { b -> if (b.size >= 2) (b[0] * 256 + b[1]).toFloat() / 10f else null }
 
     val TPMS_RR = ObdPid(
-        cmd = "01C4", name = "Tire Pressure RR", unit = "kPa",
+        cmd = "221504", name = "Tire Pressure RR", unit = "kPa",
         minVal = 0f, maxVal = 500f, group = PidGroup.MISC,
-    ) { b -> if (b.isNotEmpty()) b[0] * 3f else null }
+        header = "7D4",
+    ) { b -> if (b.size >= 2) (b[0] * 256 + b[1]).toFloat() / 10f else null }
 
     // ── Grouped sets ──────────────────────────────────────────────────────────
 
@@ -227,10 +265,11 @@ object ObdPids {
         ENGINE_LOAD, MAP, MAF,
         FUEL_LEVEL, FUEL_TRIM_ST, FUEL_TRIM_LT,
         REL_THROTTLE, ABS_LOAD, RUN_TIME,
-        OIL_TEMP, CVT_TEMP, AMBIENT_TEMP,
+        AFR, BAROMETRIC_PRESS,
+        OIL_TEMP, ECM_COOLANT_TEMP, CVT_TEMP, AMBIENT_TEMP,
         AWD_DUTY, LOCKUP_DUTY, CVT_RATIO_ACTUAL, CVT_RATIO_TARGET,
         PRIMARY_PULLEY_SPEED, SECONDARY_PULLEY_SPEED, TURBINE_RPM,
-        BATTERY_TEMP, RADIATOR_FAN, KNOCK_CORRECTION, WASTEGATE,
+        BATTERY_TEMP, RADIATOR_FAN, KNOCK_CORRECTION, EGT, WASTEGATE,
         THROTTLE_MOTOR, ALTERNATOR_DUTY, FUEL_PUMP, VVT_LEFT, VVT_RIGHT,
         O2_VOLTAGE,
     )
@@ -248,12 +287,13 @@ object ObdPids {
     val TIER1 = listOf(RPM, SPEED, COOLANT_TEMP, THROTTLE)
 
     /** Polled every N cycles (N = profile.tier2Every). */
-    val TIER2 = listOf(OIL_TEMP, CVT_TEMP, ENGINE_LOAD, VOLTAGE, INTAKE_TEMP)
+    val TIER2 = listOf(OIL_TEMP, CVT_TEMP, ENGINE_LOAD, VOLTAGE, INTAKE_TEMP, EGT)
 
     /** Polled every M cycles (M = profile.tier3Every). */
     val TIER3 = listOf(
         MAF, MAP, FUEL_TRIM_ST, FUEL_TRIM_LT, AMBIENT_TEMP, FUEL_LEVEL,
-        AWD_DUTY, REL_THROTTLE, ABS_LOAD,
+        AFR, BAROMETRIC_PRESS,
+        AWD_DUTY, REL_THROTTLE, ABS_LOAD, ECM_COOLANT_TEMP,
         KNOCK_CORRECTION, WASTEGATE, VVT_LEFT, VVT_RIGHT,
         LOCKUP_DUTY, CVT_RATIO_ACTUAL, CVT_RATIO_TARGET,
         PRIMARY_PULLEY_SPEED, SECONDARY_PULLEY_SPEED, TURBINE_RPM,

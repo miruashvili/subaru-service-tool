@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+
+    <!-- Gauge face — circle drawn with stroke only (transparent fill) -->
+    <path
+        android:pathData="M12,2C6.477,2 2,6.477 2,12s4.477,10 10,10 10,-4.477 10,-10S17.523,2 12,2z"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5" />
+
+    <!-- Tick at 12 o'clock -->
+    <path
+        android:pathData="M12,4L12,6.5"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round" />
+
+    <!-- Tick at 3 o'clock -->
+    <path
+        android:pathData="M20,12L17.5,12"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round" />
+
+    <!-- Tick at 9 o'clock -->
+    <path
+        android:pathData="M4,12L6.5,12"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:strokeLineCap="round" />
+
+    <!-- Needle pointing to ~10 o'clock (upper-left quadrant) -->
+    <path
+        android:pathData="M12,12L8.2,7.0"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="2"
+        android:strokeLineCap="round" />
+
+    <!-- Centre hub -->
+    <path
+        android:pathData="M12,10.75C11.31,10.75 10.75,11.31 10.75,12C10.75,12.69 11.31,13.25 12,13.25C12.69,13.25 13.25,12.69 13.25,12C13.25,11.31 12.69,10.75 12,10.75Z"
+        android:fillColor="#FFFFFF" />
+</vector>

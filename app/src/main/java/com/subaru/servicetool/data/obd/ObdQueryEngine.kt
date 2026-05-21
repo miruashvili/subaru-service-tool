@@ -12,6 +12,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -33,6 +34,10 @@ class ObdQueryEngine @Inject constructor(
     private val _dtcCount = MutableStateFlow(0)
     val dtcCount: StateFlow<Int> = _dtcCount.asStateFlow()
 
+    private val _carActivePids = MutableStateFlow<Set<ObdPid>>(emptySet())
+
+    fun setCarActivePids(pids: Set<ObdPid>) { _carActivePids.value = pids }
+
     private var pollJob: Job? = null
 
     init {
@@ -43,6 +48,9 @@ class ObdQueryEngine @Inject constructor(
                     else -> stopPolling()
                 }
             }
+        }
+        scope.launch {
+            _carActivePids.drop(1).collect { if (pollJob?.isActive == true) startPolling() }
         }
     }
 
@@ -90,12 +98,14 @@ class ObdQueryEngine @Inject constructor(
                     ObdPids.TIER4.filter { it in activePids && !isSkipped(it, skipCycles) }
                     else emptyList()
 
-                // Separate TCU (7E1) pids for single-switch batching
-                val allDue      = t2 + t3 + t4
-                val tcuPids     = allDue.filter { it.header == "7E1" }
-                val regularPids = t1 + allDue.filter { it.header != "7E1" }
+                // Group non-ECM module PIDs for header-switching batches (7E1, 7D4, …)
+                val allDue          = t2 + t3 + t4
+                val modulePidGroups = allDue
+                    .filter { it.header != null && it.header != "7E0" }
+                    .groupBy { it.header!! }
+                val regularPids     = t1 + allDue.filter { it.header == null || it.header == "7E0" }
 
-                // ── Regular PIDs ──────────────────────────────────────────────
+                // ── Regular PIDs (standard OBD + ECM) ────────────────────────
                 for (pid in regularPids) {
                     if (!isConnected()) break
                     val timeout = if (pid.cmd == ObdPids.OIL_TEMP.cmd) 2000L else profile.commandTimeoutMs
@@ -123,9 +133,10 @@ class ObdQueryEngine @Inject constructor(
                     if (profile.delayBetweenPidsMs > 0L) delay(profile.delayBetweenPidsMs)
                 }
 
-                // ── TCU batch ─────────────────────────────────────────────────
-                if (tcuPids.isNotEmpty() && isConnected()) {
-                    val ok = batchQueryTcu(tcuPids, profile, current, consecutiveErrors, skipCycles)
+                // ── Per-module batches (TCM 7E1, BCM 7D4, …) ─────────────────
+                for ((header, pids) in modulePidGroups) {
+                    if (pids.isEmpty() || !isConnected()) continue
+                    val ok = batchQueryModule(header, pids, profile, current, consecutiveErrors, skipCycles)
                     if (!ok) {
                         consecutiveTimeouts++
                         if (consecutiveTimeouts >= 5) {
@@ -220,21 +231,25 @@ class ObdQueryEngine @Inject constructor(
             if (pid.cmd in allCmds) active += pid
         }
 
+        // Android Auto car screen — only active while car screen is shown
+        active += _carActivePids.value
+
         Log.d(TAG, "Active PIDs: ${active.joinToString { it.name }}")
         return active
     }
 
-    // ── TCU batch query ───────────────────────────────────────────────────────
+    // ── Module batch query (any non-ECM header: 7E1, 7D4, …) ─────────────────
 
-    private suspend fun batchQueryTcu(
+    private suspend fun batchQueryModule(
+        header: String,
         pids: List<ObdPid>,
         profile: AdapterSpeedProfile,
         current: MutableMap<String, Float>,
         consecutiveErrors: MutableMap<String, Int>,
         skipCycles: MutableMap<String, Int>,
     ): Boolean {
-        // Switch to TCU header; bail immediately on timeout
-        if (btManager.sendCommand("ATSH7E1", profile.commandTimeoutMs) == null) {
+        // Switch to module header; bail immediately on timeout
+        if (btManager.sendCommand("ATSH$header", profile.commandTimeoutMs) == null) {
             btManager.sendCommand("ATSH7E0", profile.commandTimeoutMs)
             return false
         }
@@ -248,23 +263,28 @@ class ObdQueryEngine @Inject constructor(
                 delay(500) // retry once after brief pause
                 response = btManager.sendCommand(pid.cmd, TCU_READ_TIMEOUT_MS)
             }
-            if (response == null) continue // skip this pid, keep trying others
+            if (response == null) continue
             val value = ObdParser.parseUdsResponse(response, pid.cmd)?.let { pid.parse(it) }
             trackResult(pid, value, current, consecutiveErrors, skipCycles)
             anyRead = true
             if (profile.delayBetweenPidsMs > 0L) delay(profile.delayBetweenPidsMs)
         }
 
-        // Always restore ECU header
+        // Always restore ECM header
         btManager.sendCommand("ATSH7E0", profile.commandTimeoutMs)
         return anyRead
     }
 
     // ── Query helpers ─────────────────────────────────────────────────────────
 
-    private fun parsePid(pid: ObdPid, response: String): Float? = when {
-        pid.cmd.startsWith("22") -> ObdParser.parseUdsResponse(response, pid.cmd)?.let { pid.parse(it) }
-        else                     -> ObdParser.parseStandard(response, pid.cmd)?.let { pid.parse(it) }
+    private fun parsePid(pid: ObdPid, response: String): Float? {
+        val mode = pid.cmd.take(2).toIntOrNull(16) ?: return null
+        return if (mode > 9) {
+            // Mode 21 (Subaru SSM local-id) and Mode 22 (UDS) both use parseUdsResponse
+            ObdParser.parseUdsResponse(response, pid.cmd)?.let { pid.parse(it) }
+        } else {
+            ObdParser.parseStandard(response, pid.cmd)?.let { pid.parse(it) }
+        }
     }
 
     private fun trackResult(
@@ -282,7 +302,7 @@ class ObdQueryEngine @Inject constructor(
             val errors = (consecutiveErrors[pid.cmd] ?: 0) + 1
             consecutiveErrors[pid.cmd] = errors
             if (errors >= 3) {
-                val skipFor = if (pid.header == "7E1") 20 else 10
+                val skipFor = if (pid.header != null && pid.header != "7E0") 20 else 10
                 Log.d(TAG, "Skipping ${pid.name} for $skipFor cycles after 3 consecutive parse errors")
                 skipCycles[pid.cmd] = skipFor
             }

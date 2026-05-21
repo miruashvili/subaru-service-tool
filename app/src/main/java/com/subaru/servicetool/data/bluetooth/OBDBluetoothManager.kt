@@ -48,13 +48,14 @@ private const val GATT_TIMEOUT_MS = 10_000L
 private const val MTU_SIZE = 512
 
 private val ELM327_INIT = listOf(
-    "ATZ\r"     to 1000L,
-    "ATE0\r"    to  300L,
-    "ATL0\r"    to  300L,
-    "ATH1\r"    to  300L,
-    "ATSP6\r"   to  300L,
-    "ATAT1\r"   to  300L,
-    "ATST FF\r" to  300L,
+    "ATZ\r"      to 1000L,
+    "ATE0\r"     to  300L,
+    "ATL0\r"     to  300L,
+    "ATH1\r"     to  300L,
+    "ATSP6\r"    to  300L,  // ISO 15765-4 CAN 11-bit 500 kbaud
+    "ATAT1\r"    to  300L,
+    "ATST FF\r"  to  300L,
+    "ATSH7E0\r"  to  300L,  // default to ECM header; restored after every non-ECM batch
 )
 
 @Singleton

@@ -10,7 +10,6 @@ import com.subaru.servicetool.data.model.KnownIssue
 import com.subaru.servicetool.data.model.KnownIssueRegistry
 import com.subaru.servicetool.data.model.VehicleSpec
 import com.subaru.servicetool.data.obd.ObdParser
-import com.subaru.servicetool.data.obd.ObdPids
 import com.subaru.servicetool.data.obd.ObdQueryEngine
 import com.subaru.servicetool.data.preferences.UserPreferences
 import com.subaru.servicetool.data.service.ServiceEvent
@@ -66,28 +65,14 @@ sealed interface ProcedureState {
 
 enum class ActiveProcedure { NONE, GLOBAL_SWEEP }
 
-// ── TCV diagnostic check ──────────────────────────────────────────────────────
+// ── Per-issue active OBD check state ─────────────────────────────────────────
 
-sealed interface TcvCheckState {
-    data object Idle : TcvCheckState
-    data class Scanning(val progress: Float) : TcvCheckState
-    data class FaultFound(val codes: List<String>) : TcvCheckState
-    data object Ok : TcvCheckState
+sealed interface IssueCheckState {
+    data object Idle : IssueCheckState
+    data class Scanning(val progress: Float) : IssueCheckState
+    data class FaultFound(val codes: List<String>) : IssueCheckState
+    data object Ok : IssueCheckState
 }
-
-// ── TCV monitor ───────────────────────────────────────────────────────────────
-
-data class CoolantSample(val timestampMs: Long, val tempC: Float)
-
-enum class TcvWarning { NONE, SLOW_WARMUP, HIGHWAY_DROP }
-
-data class TcvMonitorState(
-    val isActive: Boolean = false,
-    val history: List<CoolantSample> = emptyList(),
-    val warmupMinutes: Float? = null,
-    val warning: TcvWarning = TcvWarning.NONE,
-    val warningMessage: String = "",
-)
 
 // ── ViewModel ─────────────────────────────────────────────────────────────────
 
@@ -112,11 +97,8 @@ class ServiceViewModel @Inject constructor(
     private val _activeProcedure = MutableStateFlow(ActiveProcedure.NONE)
     val activeProcedure: StateFlow<ActiveProcedure> = _activeProcedure.asStateFlow()
 
-    private val _tcvMonitor = MutableStateFlow(TcvMonitorState())
-    val tcvMonitor: StateFlow<TcvMonitorState> = _tcvMonitor.asStateFlow()
-
-    private val _tcvCheckState = MutableStateFlow<TcvCheckState>(TcvCheckState.Idle)
-    val tcvCheckState: StateFlow<TcvCheckState> = _tcvCheckState.asStateFlow()
+    private val _issueCheckStates = MutableStateFlow<Map<String, IssueCheckState>>(emptyMap())
+    val issueCheckStates: StateFlow<Map<String, IssueCheckState>> = _issueCheckStates.asStateFlow()
 
     private val _showClearConfirm = MutableStateFlow(false)
     val showClearConfirm: StateFlow<Boolean> = _showClearConfirm.asStateFlow()
@@ -131,12 +113,10 @@ class ServiceViewModel @Inject constructor(
     val showAddService: StateFlow<Boolean> = _showAddService.asStateFlow()
 
     private var procedureJob: Job? = null
-    private var tcvJob: Job? = null
 
     private val activeDtcCodes: MutableSet<String> = mutableSetOf()
 
     init {
-        observeSensorValues()
         observeConnectionState()
     }
 
@@ -149,49 +129,6 @@ class ServiceViewModel @Inject constructor(
                     activeDtcCodes.clear()
                 }
             }
-        }
-    }
-
-    private fun observeSensorValues() {
-        viewModelScope.launch {
-            obdEngine.sensorValues.collect { values ->
-                val coolant = values[ObdPids.COOLANT_TEMP.cmd]
-                val speed   = values[ObdPids.SPEED.cmd]
-                if (_tcvMonitor.value.isActive && coolant != null) {
-                    updateTcvHistory(coolant, speed)
-                }
-            }
-        }
-    }
-
-    private fun updateTcvHistory(coolantC: Float, speedKmh: Float?) {
-        val now = System.currentTimeMillis()
-        val cutoff = now - 5 * 60 * 1000L
-        _tcvMonitor.update { state ->
-            val trimmed = state.history.dropWhile { it.timestampMs < cutoff }
-            val updated = trimmed + CoolantSample(now, coolantC)
-
-            // Slow warmup: if elapsed > 8 min and still < 80°C
-            val elapsedMin = if (updated.isNotEmpty())
-                (now - updated.first().timestampMs) / 60_000f else 0f
-            val warmupMin = if (coolantC >= 80f && state.warmupMinutes == null) elapsedMin
-                            else state.warmupMinutes
-
-            // Highway drop: at highway speeds (>70 km/h), if temp drops >10°C from recent max
-            val recentMax = updated.takeLast(20).maxOfOrNull { it.tempC } ?: coolantC
-            val warning = when {
-                elapsedMin > 8f && coolantC < 80f ->
-                    TcvWarning.SLOW_WARMUP
-                speedKmh != null && speedKmh > 70f && coolantC < recentMax - 10f ->
-                    TcvWarning.HIGHWAY_DROP
-                else -> TcvWarning.NONE
-            }
-            val warningMsg = when (warning) {
-                TcvWarning.SLOW_WARMUP -> "Engine took over 8 min to reach 80°C — TCV may be stuck open"
-                TcvWarning.HIGHWAY_DROP -> "Coolant temp dropped ${(recentMax - coolantC).toInt()}°C at highway speed — TCV suspect"
-                else -> ""
-            }
-            state.copy(history = updated, warmupMinutes = warmupMin, warning = warning, warningMessage = warningMsg)
         }
     }
 
@@ -377,37 +314,34 @@ class ServiceViewModel @Inject constructor(
         viewModelScope.launch { userPreferences.removeServiceEvent(id) }
     }
 
-    // ── TCV Diagnostic Check ──────────────────────────────────────────────────
+    // ── Per-issue active OBD check ────────────────────────────────────────────
 
-    fun startTcvCheck() {
+    fun startIssueCheck(issue: KnownIssue) {
+        val header = issue.checkHeader ?: return
         if (!isConnected()) return
         viewModelScope.launch {
-            _tcvCheckState.value = TcvCheckState.Scanning(0f)
-            val obdDeferred = async { btManager.sendCommand("03") }
-            val start = System.currentTimeMillis()
-            while (System.currentTimeMillis() - start < 8_000L) {
-                val p = ((System.currentTimeMillis() - start) / 8_000f).coerceAtMost(0.99f)
-                _tcvCheckState.value = TcvCheckState.Scanning(p)
-                delay(50)
+            _issueCheckStates.update { it + (issue.id to IssueCheckState.Scanning(0f)) }
+            btManager.sendCommand("ATSH$header", 2000L)
+            delay(150)
+            val queryJob = async { btManager.sendCommand("03", 6000L) }
+            val scanStart = System.currentTimeMillis()
+            while (!queryJob.isCompleted) {
+                val p = ((System.currentTimeMillis() - scanStart) / 6000f).coerceAtMost(0.95f)
+                _issueCheckStates.update { it + (issue.id to IssueCheckState.Scanning(p)) }
+                delay(80)
             }
-            _tcvCheckState.value = TcvCheckState.Scanning(1f)
-            val response = obdDeferred.await()
-            val found = if (response != null) ObdParser.parseTcvCodes(response) else emptyList()
-            _tcvCheckState.value = if (found.isNotEmpty()) TcvCheckState.FaultFound(found) else TcvCheckState.Ok
+            val response = queryJob.await()
+            val allCodes = if (response != null) ObdParser.parseDtcCodes(response) else emptyList()
+            val matching = allCodes.filter { it in issue.dtcCodes }
+            btManager.sendCommand("ATSH7E0", 2000L)
+            _issueCheckStates.update { it + (issue.id to
+                if (matching.isNotEmpty()) IssueCheckState.FaultFound(matching) else IssueCheckState.Ok
+            )}
         }
     }
 
-    fun resetTcvCheck() { _tcvCheckState.value = TcvCheckState.Idle }
-
-    // ── TCV Monitor ───────────────────────────────────────────────────────────
-
-    fun toggleTcvMonitor() {
-        val active = !_tcvMonitor.value.isActive
-        if (active) {
-            _tcvMonitor.value = TcvMonitorState(isActive = true)
-        } else {
-            _tcvMonitor.update { it.copy(isActive = false) }
-        }
+    fun resetIssueCheck(issueId: String) {
+        _issueCheckStates.update { it - issueId }
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────

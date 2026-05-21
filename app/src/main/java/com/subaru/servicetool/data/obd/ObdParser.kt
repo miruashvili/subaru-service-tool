@@ -151,6 +151,38 @@ object ObdParser {
         return found.distinct()
     }
 
+    /**
+     * Parses DTC codes from a UDS ReadDTCByStatusMask response (Service 0x19 / 0x02).
+     * Response: "59 02 [status_availability_mask] [[b0 b1 b2 status]...]"
+     * Bytes 0-1 of each 3-byte DTC match Mode 03 byte layout; byte 2 is an extension (ignored).
+     * Returns an empty list if the module doesn't support the service or has no faults.
+     */
+    fun parseUdsDtcResponse(response: String): List<String> {
+        val tokens = tokenize(response) ?: return emptyList()
+        val idx = tokens.indexOfFirst { it == "59" }
+        if (idx < 0 || tokens.getOrNull(idx + 1) != "02") return emptyList()
+        val dataStart = idx + 3 // skip 59 02 statusAvailabilityMask
+        if (dataStart >= tokens.size) return emptyList()
+        val dtcTokens = tokens.drop(dataStart)
+        val codes = mutableListOf<String>()
+        var i = 0
+        while (i + 3 < dtcTokens.size) { // 3 DTC bytes + 1 status byte per group
+            val hi = dtcTokens[i].toIntOrNull(16) ?: 0
+            val lo = dtcTokens[i + 1].toIntOrNull(16) ?: 0
+            if (hi != 0 || lo != 0) {
+                val type = when ((hi shr 6) and 0x3) { 0 -> "P"; 1 -> "C"; 2 -> "B"; else -> "U" }
+                val d1 = (hi shr 4) and 0x3
+                val d2 = (hi and 0xF).toString(16).uppercase()
+                val d3 = (lo shr 4).toString(16).uppercase()
+                val d4 = (lo and 0xF).toString(16).uppercase()
+                val code = "$type$d1$d2$d3$d4"
+                if (DTC_PATTERN.matches(code)) codes.add(code)
+            }
+            i += 4
+        }
+        return codes.distinct()
+    }
+
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private fun parseDataBytes(response: String, mode: Int, pidHex: String): List<Int>? {

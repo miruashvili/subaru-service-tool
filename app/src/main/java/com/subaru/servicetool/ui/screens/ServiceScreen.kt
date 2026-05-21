@@ -159,7 +159,7 @@ fun ServiceScreen(
         AlertDialog(
             onDismissRequest = viewModel::dismissClearConfirm,
             title = { Text("Clear All Fault Codes?") },
-            text  = { Text("This will erase all stored DTCs from the ECU. This action cannot be undone.") },
+            text  = { Text("This will erase all stored DTCs from every module (ECM, TCM, ABS, SRS, BCM). This action cannot be undone.") },
             confirmButton = {
                 Button(
                     onClick = viewModel::confirmClearDtcs,
@@ -869,17 +869,45 @@ private fun DiagnosticsCard(
                     )
                 }
                 is DtcScanState.Scanning -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(10.dp))
-                        Text(state.message, style = MaterialTheme.typography.bodySmall)
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                state.message,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { state.progress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp)),
+                        )
                     }
                 }
                 is DtcScanState.Clearing -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(10.dp))
-                        Text("Clearing fault codes…", style = MaterialTheme.typography.bodySmall)
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                state.message,
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f),
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { state.progress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp)),
+                        )
                     }
                 }
                 is DtcScanState.NoCodes -> {

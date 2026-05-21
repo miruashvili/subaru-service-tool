@@ -38,12 +38,22 @@ data class DtcResult(
 
 sealed interface DtcScanState {
     data object Idle : DtcScanState
-    data class Scanning(val message: String = "Reading fault codes…") : DtcScanState
-    data object Clearing : DtcScanState
+    data class Scanning(val message: String = "Reading fault codes…", val progress: Float = 0f) : DtcScanState
+    data class Clearing(val message: String = "Clearing fault codes…", val progress: Float = 0f) : DtcScanState
     data object NoCodes : DtcScanState
     data class Results(val codes: List<DtcResult>) : DtcScanState
     data class Error(val message: String) : DtcScanState
 }
+
+private data class DiagModule(val name: String, val header: String)
+
+private val DIAG_MODULES = listOf(
+    DiagModule("Engine (ECM)",       "7E0"),
+    DiagModule("Transmission (TCM)", "7E1"),
+    DiagModule("ABS / VDC",          "7E2"),
+    DiagModule("Airbag (SRS)",       "7E3"),
+    DiagModule("Body Control (BCM)", "7D4"),
+)
 
 // ── Procedure state ───────────────────────────────────────────────────────────
 
@@ -221,39 +231,57 @@ class ServiceViewModel @Inject constructor(
     fun scanDtcs() {
         if (!isConnected()) { _dtcScanState.value = DtcScanState.Error("OBD adapter not connected"); return }
         viewModelScope.launch {
-            val startTime = System.currentTimeMillis()
-
-            _dtcScanState.value = DtcScanState.Scanning("Connecting to ECU…")
-            delay(800)
-
-            _dtcScanState.value = DtcScanState.Scanning("Reading stored fault codes…")
-            val response03 = btManager.sendCommand("03", 5000L)
-
-            _dtcScanState.value = DtcScanState.Scanning("Reading pending fault codes…")
-            val response07 = btManager.sendCommand("07", 5000L)
-            val response0A = btManager.sendCommand("0A", 5000L)
-
-            _dtcScanState.value = DtcScanState.Scanning("Analysis complete")
-
-            // Ensure minimum 3-second scan so the user sees progress
-            val elapsed = System.currentTimeMillis() - startTime
-            if (elapsed < 3000L) delay(3000L - elapsed)
-
             val allCodes = mutableListOf<String>()
-            if (response03 != null) allCodes += ObdParser.parseDtcCodes(response03)
-            if (response07 != null) allCodes += ObdParser.parseDtcCodes(response07)
-            if (response0A != null) allCodes += ObdParser.parseDtcCodes(response0A)
-            val codes = allCodes.distinct()
+            val total = DIAG_MODULES.size
 
+            for ((idx, module) in DIAG_MODULES.withIndex()) {
+                _dtcScanState.value = DtcScanState.Scanning(
+                    message  = "Scanning ${module.name}…",
+                    progress = idx.toFloat() / total,
+                )
+
+                // Switch CAN header to this module
+                btManager.sendCommand("ATSH${module.header}", 2000L)
+                delay(150)
+
+                // Mode 03 — stored DTCs (supported by all ISO 15765 modules)
+                val r03 = btManager.sendCommand("03", 5000L)
+                val codes03 = if (r03 != null) ObdParser.parseDtcCodes(r03) else emptyList()
+
+                if (codes03.isNotEmpty()) {
+                    allCodes += codes03
+                } else {
+                    // UDS 19 02 0D fallback — confirmed faults on modules that don't respond to Mode 03
+                    val rUds = btManager.sendCommand("19020D", 5000L)
+                    if (rUds != null) allCodes += ObdParser.parseUdsDtcResponse(rUds)
+                }
+
+                // ECM only: also query pending (07) and permanent (0A) DTCs
+                if (module.header == "7E0") {
+                    val r07 = btManager.sendCommand("07", 5000L)
+                    val r0A = btManager.sendCommand("0A", 5000L)
+                    if (r07 != null) allCodes += ObdParser.parseDtcCodes(r07)
+                    if (r0A != null) allCodes += ObdParser.parseDtcCodes(r0A)
+                }
+            }
+
+            // Restore ECM header for normal polling
+            btManager.sendCommand("ATSH7E0", 2000L)
+
+            _dtcScanState.value = DtcScanState.Scanning("Scan complete", 1f)
+            delay(300)
+
+            val codes = allCodes.distinct()
             activeDtcCodes.clear()
             activeDtcCodes.addAll(codes)
+
             if (codes.isEmpty()) {
                 _dtcScanState.value = DtcScanState.NoCodes
             } else {
                 val results = codes.map { code ->
                     DtcResult(
-                        code = code,
-                        entry = DtcDatabase.lookup(code),
+                        code       = code,
+                        entry      = DtcDatabase.lookup(code),
                         knownIssue = KnownIssueRegistry.findByDtcCode(code),
                     )
                 }
@@ -269,11 +297,39 @@ class ServiceViewModel @Inject constructor(
         _showClearConfirm.value = false
         if (!isConnected()) { _dtcScanState.value = DtcScanState.Error("OBD adapter not connected"); return }
         viewModelScope.launch {
-            _dtcScanState.value = DtcScanState.Clearing
-            val response = btManager.sendCommand("04")
+            var anyCleared = false
+            val total = DIAG_MODULES.size
+
+            for ((idx, module) in DIAG_MODULES.withIndex()) {
+                _dtcScanState.value = DtcScanState.Clearing(
+                    message  = "Clearing ${module.name}…",
+                    progress = idx.toFloat() / total,
+                )
+
+                // Switch CAN header
+                btManager.sendCommand("ATSH${module.header}", 2000L)
+                delay(150)
+
+                // OBD-II Mode 04 — universal clear on all ISO 15765 modules
+                val r04 = btManager.sendCommand("04", 3000L)
+                if (r04 != null && r04.uppercase().contains("44")) anyCleared = true
+
+                // UDS Service 14 — ClearDTCInformation (group-of-DTC = FF FF FF = all)
+                btManager.sendCommand("14FFFFFF", 3000L)
+
+                delay(150) // EEPROM cycle time between modules
+            }
+
+            // Restore ECM header for normal polling
+            btManager.sendCommand("ATSH7E0", 2000L)
+
+            _dtcScanState.value = DtcScanState.Clearing("Clear complete", 1f)
+            delay(400)
+
             activeDtcCodes.clear()
-            if (response != null && response.uppercase().contains("44")) {
-                obdEngine.requestDtcRefresh()
+            obdEngine.requestDtcRefresh()
+
+            if (anyCleared) {
                 _dtcScanState.value = DtcScanState.NoCodes
                 _showEcuRelearnDialog.value = true
             } else {

@@ -64,19 +64,7 @@ sealed interface ProcedureState {
     data class Error(val message: String) : ProcedureState
 }
 
-enum class ActiveProcedure { NONE, ENGINE_ADAPT, THROTTLE_RELEARN, CVT_RESET }
-
-// ── CVT condition checklist ───────────────────────────────────────────────────
-
-data class CvtConditions(
-    val engineWarm: Boolean = false,
-    val stationary: Boolean = false,
-    val idling: Boolean = false,
-    val inPark: Boolean = false,
-    val accessoriesOff: Boolean = false,
-) {
-    val allPassed get() = engineWarm && stationary && idling && inPark && accessoriesOff
-}
+enum class ActiveProcedure { NONE, GLOBAL_SWEEP }
 
 // ── TCV diagnostic check ──────────────────────────────────────────────────────
 
@@ -124,9 +112,6 @@ class ServiceViewModel @Inject constructor(
     private val _activeProcedure = MutableStateFlow(ActiveProcedure.NONE)
     val activeProcedure: StateFlow<ActiveProcedure> = _activeProcedure.asStateFlow()
 
-    private val _cvtConditions = MutableStateFlow(CvtConditions())
-    val cvtConditions: StateFlow<CvtConditions> = _cvtConditions.asStateFlow()
-
     private val _tcvMonitor = MutableStateFlow(TcvMonitorState())
     val tcvMonitor: StateFlow<TcvMonitorState> = _tcvMonitor.asStateFlow()
 
@@ -138,10 +123,6 @@ class ServiceViewModel @Inject constructor(
 
     private val _showEcuRelearnDialog = MutableStateFlow(false)
     val showEcuRelearnDialog: StateFlow<Boolean> = _showEcuRelearnDialog.asStateFlow()
-
-    // CVT guided relearn step: null = not in guided mode, 0-3 = steps
-    private val _cvtRelearnStep = MutableStateFlow<Int?>(null)
-    val cvtRelearnStep: StateFlow<Int?> = _cvtRelearnStep.asStateFlow()
 
     val serviceLog: StateFlow<List<ServiceEvent>> = userPreferences.serviceLog
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -175,19 +156,7 @@ class ServiceViewModel @Inject constructor(
         viewModelScope.launch {
             obdEngine.sensorValues.collect { values ->
                 val coolant = values[ObdPids.COOLANT_TEMP.cmd]
-                val rpm = values[ObdPids.RPM.cmd]
-                val speed = values[ObdPids.SPEED.cmd]
-
-                // Update CVT conditions from live data
-                _cvtConditions.update { c ->
-                    c.copy(
-                        engineWarm = coolant != null && coolant >= 80f,
-                        stationary = speed != null && speed <= 0f,
-                        idling = rpm != null && rpm in 600f..900f,
-                    )
-                }
-
-                // Update TCV monitor
+                val speed   = values[ObdPids.SPEED.cmd]
                 if (_tcvMonitor.value.isActive && coolant != null) {
                     updateTcvHistory(coolant, speed)
                 }
@@ -344,95 +313,38 @@ class ServiceViewModel @Inject constructor(
 
     fun resetDtcState() { _dtcScanState.value = DtcScanState.Idle }
 
-    // ── Procedure: Engine Adaptation Reset ───────────────────────────────────
+    // ── Procedure: Global ECU Error Sweep & Reset ────────────────────────────
 
-    fun startEngineAdaptationReset() {
-        procedureJob?.cancel()
-        _activeProcedure.value = ActiveProcedure.ENGINE_ADAPT
-        procedureJob = viewModelScope.launch {
-            runProcedure(
-                steps = listOf(
-                    "Verifying engine temperature…" to { checkCondition("coolant ≥ 70°C") { coolant() >= 70f } },
-                    "Clearing adaptive fuel tables…" to { sendObd("04") },
-                    "Requesting idle stabilisation…" to { delay(1500); true },
-                    "Completing reset…" to { delay(800); true },
-                ),
-                successMessage = "Adaptation cleared. Idle engine 10 min for ECU relearn.",
-                failMessage = "Engine must be at operating temperature (≥70°C) and OBD connected.",
-                onSuccess = { _showEcuRelearnDialog.value = true },
-            )
-        }
-    }
-
-    // ── Procedure: Throttle Body Relearn ─────────────────────────────────────
-
-    fun startThrottleBodyRelearn() {
-        procedureJob?.cancel()
-        _activeProcedure.value = ActiveProcedure.THROTTLE_RELEARN
-        procedureJob = viewModelScope.launch {
-            runProcedure(
-                steps = listOf(
-                    "Checking engine temp (≥80°C)…" to { checkCondition("coolant ≥ 80°C") { coolant() >= 80f } },
-                    "Checking vehicle stationary…" to { checkCondition("speed = 0") { speed() <= 0f } },
-                    "Cutting throttle reference signal…" to { delay(1200); true },
-                    "Holding idle relearn window (3 s)…" to { delay(3000); true },
-                    "Writing throttle base position…" to { delay(1000); true },
-                ),
-                successMessage = "Throttle body relearn complete. Idle will stabilise in 1–2 min.",
-                failMessage = "Engine must be fully warm (≥80°C) and vehicle stationary.",
-            )
-        }
-    }
-
-    // ── Procedure: CVT Reset & Learning (SSM4 sequence) ──────────────────────
-
-    fun startCvtReset() {
-        if (!_cvtConditions.value.allPassed) {
-            _procedureState.value = ProcedureState.Error("Complete all 5 conditions before initiating CVT reset.")
-            _activeProcedure.value = ActiveProcedure.CVT_RESET
+    fun startGlobalEcuSweep() {
+        if (!isConnected()) {
+            _procedureState.value = ProcedureState.Error("OBD adapter not connected.")
+            _activeProcedure.value = ActiveProcedure.GLOBAL_SWEEP
             return
         }
         procedureJob?.cancel()
-        _activeProcedure.value = ActiveProcedure.CVT_RESET
+        _activeProcedure.value = ActiveProcedure.GLOBAL_SWEEP
         procedureJob = viewModelScope.launch {
-            runProcedure(
-                steps = listOf(
-                    "Validating CVT conditions…" to { delay(600); true },
-                    "Setting TCU CAN header (ATSH 7E1)…" to { sendObd("ATSH7E1") },
-                    "Opening diagnostic session (10 01)…" to { sendObd("1001") },
-                    "Writing CVT relearn flag (2F 00 02 01 01)…" to { sendObd("2F00020101") },
-                    "Initiating guided gear cycle…" to { _cvtRelearnStep.value = 0; delay(500); true },
-                ),
-                successMessage = "CVT write complete — follow the guided gear cycle.",
-                failMessage = "CVT reset aborted — check connection and conditions.",
+            val total = DIAG_MODULES.size
+            for ((idx, module) in DIAG_MODULES.withIndex()) {
+                _procedureState.value = ProcedureState.Running(
+                    step  = idx + 1,
+                    total = total,
+                    label = "Resetting ${module.name}…",
+                )
+                btManager.sendCommand("ATSH${module.header}", 2000L)
+                delay(150)
+                val r04 = btManager.sendCommand("04", 3000L)
+                if (r04 == null || !r04.uppercase().contains("44")) {
+                    btManager.sendCommand("14FFFFFF", 3000L)
+                }
+                delay(150)
+            }
+            btManager.sendCommand("ATSH7E0", 2000L)
+            _procedureState.value = ProcedureState.Success(
+                "All 5 modules reset. Drive gently — ECU will relearn adaptive parameters over the next drive cycle."
             )
-        }
-    }
-
-    /** Called by UI when user confirms each gear step (0=D, 1=R, 2=N, 3=Ignition). */
-    fun advanceCvtRelearnStep() {
-        val step = _cvtRelearnStep.value ?: return
-        if (step < 3) {
-            _cvtRelearnStep.value = step + 1
-        } else {
-            _cvtRelearnStep.value = null
-            _procedureState.value = ProcedureState.Success("CVT relearn complete. Drive gently for 10–15 min.")
             _activeProcedure.value = ActiveProcedure.NONE
-        }
-    }
-
-    fun cancelCvtRelearn() {
-        _cvtRelearnStep.value = null
-        _procedureState.value = ProcedureState.Idle
-        _activeProcedure.value = ActiveProcedure.NONE
-    }
-
-    fun toggleCvtManualCondition(park: Boolean? = null, accessories: Boolean? = null) {
-        _cvtConditions.update { c ->
-            c.copy(
-                inPark = park ?: c.inPark,
-                accessoriesOff = accessories ?: c.accessoriesOff,
-            )
+            _showEcuRelearnDialog.value = true
         }
     }
 
@@ -499,39 +411,6 @@ class ServiceViewModel @Inject constructor(
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-
-    private suspend fun runProcedure(
-        steps: List<Pair<String, suspend () -> Boolean>>,
-        successMessage: String,
-        failMessage: String,
-        onSuccess: (() -> Unit)? = null,
-    ) {
-        for ((i, step) in steps.withIndex()) {
-            _procedureState.value = ProcedureState.Running(i + 1, steps.size, step.first)
-            val ok = step.second()
-            if (!ok) {
-                _procedureState.value = ProcedureState.Error(failMessage)
-                _activeProcedure.value = ActiveProcedure.NONE
-                return
-            }
-        }
-        _procedureState.value = ProcedureState.Success(successMessage)
-        _activeProcedure.value = ActiveProcedure.NONE
-        onSuccess?.invoke()
-    }
-
-    private suspend fun checkCondition(label: String, predicate: suspend () -> Boolean): Boolean {
-        delay(600)
-        return if (!isConnected()) false else predicate()
-    }
-
-    private suspend fun sendObd(cmd: String): Boolean {
-        if (!isConnected()) return false
-        return btManager.sendCommand(cmd) != null
-    }
-
-    private fun coolant(): Float = obdEngine.sensorValues.value[ObdPids.COOLANT_TEMP.cmd] ?: -999f
-    private fun speed(): Float  = obdEngine.sensorValues.value[ObdPids.SPEED.cmd]       ?: -999f
 
     private fun isConnected() =
         btManager.connectionState.value is BluetoothConnectionState.Connected

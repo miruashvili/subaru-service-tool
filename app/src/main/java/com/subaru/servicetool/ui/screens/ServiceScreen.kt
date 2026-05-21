@@ -43,7 +43,6 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Speed
@@ -53,7 +52,6 @@ import androidx.compose.material.icons.filled.WaterDrop
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -102,7 +100,6 @@ import com.subaru.servicetool.data.service.ServiceEvent
 import com.subaru.servicetool.data.service.ServiceEventType
 import com.subaru.servicetool.ui.service.ActiveProcedure
 import com.subaru.servicetool.ui.service.CoolantSample
-import com.subaru.servicetool.ui.service.CvtConditions
 import com.subaru.servicetool.ui.service.DtcResult
 import com.subaru.servicetool.ui.service.DtcScanState
 import com.subaru.servicetool.ui.service.ProcedureState
@@ -124,14 +121,12 @@ fun ServiceScreen(
     val dtcState          by viewModel.dtcScanState.collectAsState()
     val procState         by viewModel.procedureState.collectAsState()
     val activeProc        by viewModel.activeProcedure.collectAsState()
-    val cvtConds          by viewModel.cvtConditions.collectAsState()
     val tcvMon            by viewModel.tcvMonitor.collectAsState()
     val tcvCheckState     by viewModel.tcvCheckState.collectAsState()
     val connectionState   by viewModel.connectionState.collectAsState()
     val isConnected       = connectionState is BluetoothConnectionState.Connected
     val showConfirm       by viewModel.showClearConfirm.collectAsState()
     val showEcuRelearn    by viewModel.showEcuRelearnDialog.collectAsState()
-    val cvtRelearnStep    by viewModel.cvtRelearnStep.collectAsState()
     val serviceLog        by viewModel.serviceLog.collectAsState()
     val showAddSvc        by viewModel.showAddService.collectAsState()
 
@@ -144,15 +139,6 @@ fun ServiceScreen(
 
     if (showEcuRelearn) {
         EcuRelearnDialog(onDismiss = viewModel::dismissEcuRelearnDialog)
-    }
-
-    // CVT guided gear cycle overlay
-    cvtRelearnStep?.let { step ->
-        CvtRelearnStepDialog(
-            step      = step,
-            onConfirm = viewModel::advanceCvtRelearnStep,
-            onCancel  = viewModel::cancelCvtRelearn,
-        )
     }
 
     if (showConfirm) {
@@ -217,46 +203,18 @@ fun ServiceScreen(
             }
         }
 
-        // ── Engine Adaptation Reset ────────────────────────────────────────
+        // ── Global ECU Error Sweep & Reset ────────────────────────────────
         item {
             ProcedureCard(
-                title        = "Engine Adaptation Reset",
-                description  = "Clears ECU adaptive fuel trims. Required after engine work, injector replacement, or rough idle.",
+                title        = "Global ECU Error Sweep & Reset",
+                description  = "Sequentially targets all 5 Subaru modules (ECM, TCM, ABS, SRS, BCM) and issues Mode 04 + UDS 14FFFFFF clear commands with a 150 ms EEPROM settling delay between each module.",
                 icon         = Icons.Filled.Settings,
-                buttonLabel  = "Run Reset",
+                buttonLabel  = "Run Global Reset",
                 buttonColor  = DarkPrimary,
-                isActive     = activeProc == ActiveProcedure.ENGINE_ADAPT,
-                procState    = if (activeProc == ActiveProcedure.ENGINE_ADAPT || procState is ProcedureState.Success) procState else ProcedureState.Idle,
-                onStart      = viewModel::startEngineAdaptationReset,
+                isActive     = activeProc == ActiveProcedure.GLOBAL_SWEEP,
+                procState    = if (activeProc == ActiveProcedure.GLOBAL_SWEEP || procState is ProcedureState.Success) procState else ProcedureState.Idle,
+                onStart      = viewModel::startGlobalEcuSweep,
                 onDismiss    = viewModel::resetProcedure,
-            )
-        }
-
-        // ── Throttle Body Relearn ──────────────────────────────────────────
-        item {
-            ProcedureCard(
-                title        = "Throttle Body Relearn",
-                description  = "Resets throttle position baseline. Required after cleaning throttle body or replacing the unit.",
-                icon         = Icons.Filled.Speed,
-                buttonLabel  = "Run Relearn",
-                buttonColor  = DarkPrimary,
-                isActive     = activeProc == ActiveProcedure.THROTTLE_RELEARN,
-                procState    = if (activeProc == ActiveProcedure.THROTTLE_RELEARN || procState is ProcedureState.Success) procState else ProcedureState.Idle,
-                onStart      = viewModel::startThrottleBodyRelearn,
-                onDismiss    = viewModel::resetProcedure,
-            )
-        }
-
-        // ── CVT Reset & Learning ───────────────────────────────────────────
-        item {
-            CvtResetCard(
-                conditions = cvtConds,
-                isActive   = activeProc == ActiveProcedure.CVT_RESET,
-                procState  = if (activeProc == ActiveProcedure.CVT_RESET || procState is ProcedureState.Success) procState else ProcedureState.Idle,
-                onTogglePark        = { viewModel.toggleCvtManualCondition(park = !cvtConds.inPark) },
-                onToggleAccessories = { viewModel.toggleCvtManualCondition(accessories = !cvtConds.accessoriesOff) },
-                onStart  = viewModel::startCvtReset,
-                onDismiss = viewModel::resetProcedure,
             )
         }
 
@@ -1056,86 +1014,6 @@ private fun ProcedureCard(
     }
 }
 
-// ── CVT Reset Card ────────────────────────────────────────────────────────────
-
-@Composable
-private fun CvtResetCard(
-    conditions: CvtConditions,
-    isActive: Boolean,
-    procState: ProcedureState,
-    onTogglePark: () -> Unit,
-    onToggleAccessories: () -> Unit,
-    onStart: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    ServiceCard(title = "CVT Reset & Learning", icon = Icons.Filled.Refresh) {
-        Text(
-            "Resets CVT adaptive shift logic. Required after: CVT fluid change, valve body replacement, or solenoid replacement.",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurface.copy(0.6f),
-        )
-        Spacer(Modifier.height(12.dp))
-
-        Text("Conditions", style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurface.copy(0.55f))
-        Spacer(Modifier.height(6.dp))
-
-        // Auto-checked conditions
-        ConditionRow("Engine warm (coolant ≥ 80°C)", conditions.engineWarm, auto = true)
-        ConditionRow("Vehicle stationary (speed = 0)", conditions.stationary, auto = true)
-        ConditionRow("Engine idling (600–900 RPM)", conditions.idling, auto = true)
-        // Manual checkboxes
-        ConditionRowCheckbox("Gear selector in P (Park)", conditions.inPark, onTogglePark)
-        ConditionRowCheckbox("A/C and all accessories off", conditions.accessoriesOff, onToggleAccessories)
-
-        Spacer(Modifier.height(12.dp))
-        ProcedureStateView(
-            procState   = procState,
-            buttonLabel = "Initiate CVT Reset",
-            buttonColor = if (conditions.allPassed) DarkPrimary else MaterialTheme.colorScheme.outline,
-            onStart     = onStart,
-            onDismiss   = onDismiss,
-        )
-    }
-}
-
-@Composable
-private fun ConditionRow(label: String, passed: Boolean, auto: Boolean) {
-    Row(
-        modifier = Modifier.padding(vertical = 3.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(
-            if (passed) Icons.Filled.CheckCircle else Icons.Filled.ErrorOutline,
-            contentDescription = null,
-            tint = if (passed) DarkSuccess else MaterialTheme.colorScheme.onSurface.copy(0.35f),
-            modifier = Modifier.size(16.dp),
-        )
-        Spacer(Modifier.width(8.dp))
-        Text(label, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-        if (auto) {
-            Text("AUTO", style = MaterialTheme.typography.labelSmall.copy(fontSize = 9.sp),
-                color = MaterialTheme.colorScheme.onSurface.copy(0.3f))
-        }
-    }
-}
-
-@Composable
-private fun ConditionRowCheckbox(label: String, checked: Boolean, onToggle: () -> Unit) {
-    Row(
-        modifier = Modifier.padding(vertical = 3.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Checkbox(
-            checked = checked,
-            onCheckedChange = { onToggle() },
-            modifier = Modifier.size(16.dp),
-        )
-        Spacer(Modifier.width(12.dp))
-        Text(label, style = MaterialTheme.typography.bodySmall)
-    }
-}
-
 // ── Procedure state widget ────────────────────────────────────────────────────
 
 @Composable
@@ -1531,50 +1409,6 @@ private fun EcuRelearnDialog(onDismiss: () -> Unit) {
             Button(onClick = onDismiss, colors = ButtonDefaults.buttonColors(containerColor = DarkPrimary)) {
                 Text("Understood")
             }
-        },
-    )
-}
-
-// ── CVT Relearn guided gear cycle ─────────────────────────────────────────────
-
-@Composable
-private fun CvtRelearnStepDialog(step: Int, onConfirm: () -> Unit, onCancel: () -> Unit) {
-    val steps = listOf(
-        "Move gear selector to D (Drive)" to "Select Drive — then tap Done",
-        "Move gear selector to R (Reverse)" to "Select Reverse — then tap Done",
-        "Move gear selector to N (Neutral)" to "Select Neutral — then tap Done",
-        "Turn ignition OFF for 10 seconds, then back ON" to "Key off → wait 10s → key on",
-    )
-    val (title, sub) = steps.getOrNull(step) ?: return
-
-    AlertDialog(
-        onDismissRequest = onCancel,
-        icon = { Icon(Icons.Filled.Refresh, contentDescription = null, tint = DarkPrimary) },
-        title = {
-            Column {
-                Text("CVT Relearn — Step ${step + 1} of ${steps.size}",
-                    style = MaterialTheme.typography.titleMedium)
-                LinearProgressIndicator(
-                    progress = { (step + 1).toFloat() / steps.size },
-                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                )
-            }
-        },
-        text = {
-            Column {
-                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-                Spacer(Modifier.height(6.dp))
-                Text(sub, style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(0.6f))
-            }
-        },
-        confirmButton = {
-            Button(onClick = onConfirm, colors = ButtonDefaults.buttonColors(containerColor = DarkPrimary)) {
-                Text(if (step < 3) "Done" else "Finish")
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onCancel) { Text("Cancel") }
         },
     )
 }

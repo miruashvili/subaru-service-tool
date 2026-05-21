@@ -39,6 +39,7 @@ class ObdQueryEngine @Inject constructor(
     fun setCarActivePids(pids: Set<ObdPid>) { _carActivePids.value = pids }
 
     private var pollJob: Job? = null
+    private var cachedProbe: SensorProbeResult? = null
 
     init {
         scope.launch {
@@ -65,7 +66,8 @@ class ObdQueryEngine @Inject constructor(
             delay(500)
             queryDtcs()
 
-            val activePids = buildActivePidSet()
+            val probeResult = loadOrRunProbe()
+            val activePids  = buildActivePidSet(probeResult)
 
             val consecutiveErrors   = mutableMapOf<String, Int>()
             val skipCycles          = mutableMapOf<String, Int>()
@@ -99,9 +101,13 @@ class ObdQueryEngine @Inject constructor(
                     else emptyList()
 
                 // Group non-ECM module PIDs for header-switching batches (7E1, 7D4, …)
+                // Skip 7E1 (TCU) entirely when probe determined TCU is absent on this vehicle
                 val allDue          = t2 + t3 + t4
                 val modulePidGroups = allDue
-                    .filter { it.header != null && it.header != "7E0" }
+                    .filter { pid ->
+                        pid.header != null && pid.header != "7E0" &&
+                        (pid.header != "7E1" || probeResult.tcuAvailable)
+                    }
                     .groupBy { it.header!! }
                 val regularPids     = t1 + allDue.filter { it.header == null || it.header == "7E0" }
 
@@ -109,7 +115,21 @@ class ObdQueryEngine @Inject constructor(
                 for (pid in regularPids) {
                     if (!isConnected()) break
                     val timeout = if (pid.cmd == ObdPids.OIL_TEMP.cmd) 2000L else profile.commandTimeoutMs
-                    val response = btManager.sendCommand(pid.cmd, timeout)
+
+                    // OIL_TEMP: route to the probed physical source
+                    val response: String?
+                    var value: Float?
+                    if (pid == ObdPids.OIL_TEMP && probeResult.oilTempSource == OilTempSource.OBD_STANDARD) {
+                        response = btManager.sendCommand("015C", timeout)
+                        value = response?.let {
+                            ObdParser.parseStandard(it, "015C")
+                                ?.let { bytes -> if (bytes.isNotEmpty()) (bytes[0] - 40).toFloat() else null }
+                        }
+                    } else {
+                        response = btManager.sendCommand(pid.cmd, timeout)
+                        value = response?.let { parsePid(pid, it) }
+                    }
+
                     if (response == null) {
                         consecutiveTimeouts++
                         if (consecutiveTimeouts >= 5) {
@@ -119,7 +139,6 @@ class ObdQueryEngine @Inject constructor(
                         }
                     } else {
                         consecutiveTimeouts = 0
-                        var value = parsePid(pid, response)
                         // IAT fallback: some adapters return NO DATA for 010F — try 0168
                         if (pid == ObdPids.INTAKE_TEMP && value == null && isConnected()) {
                             val fallback = btManager.sendCommand("0168", profile.commandTimeoutMs)
@@ -191,11 +210,66 @@ class ObdQueryEngine @Inject constructor(
         pollJob = null
         _sensorValues.value = emptyMap()
         _dtcCount.value = 0
+        cachedProbe = null
+    }
+
+    // ── Sensor probe ──────────────────────────────────────────────────────────
+
+    /** Returns cached probe result (DataStore → memory), running the probe if no cache exists. */
+    private suspend fun loadOrRunProbe(): SensorProbeResult {
+        cachedProbe?.let { return it }
+
+        val storedSource = userPreferences.probeOilTempSource.first()
+        val storedTcu    = userPreferences.probeTcuAvailable.first()
+        if (storedSource != "NONE" || storedTcu) {
+            val src = runCatching { OilTempSource.valueOf(storedSource) }.getOrDefault(OilTempSource.NONE)
+            Log.d(TAG, "Probe cache hit: oil=$src tcu=$storedTcu")
+            return SensorProbeResult(src, storedTcu).also { cachedProbe = it }
+        }
+
+        return runSensorProbe().also {
+            cachedProbe = it
+            userPreferences.saveSensorProbe(it.oilTempSource.name, it.tcuAvailable)
+            Log.d(TAG, "Probe complete: oil=${it.oilTempSource} tcu=${it.tcuAvailable}")
+        }
+    }
+
+    private suspend fun runSensorProbe(): SensorProbeResult {
+        val profile = btManager.adapterSpeedProfile.value
+
+        // Probe 1: standard OBD-II Mode 01 PID 5C (engine oil temp)
+        var oilTempSource = OilTempSource.NONE
+        val stdResp = btManager.sendCommand("015C", 2000L)
+        if (stdResp != null && ObdParser.parseStandard(stdResp, "015C")?.isNotEmpty() == true) {
+            oilTempSource = OilTempSource.OBD_STANDARD
+            Log.d(TAG, "Probe 1: OIL_TEMP → OBD_STANDARD (015C)")
+        } else {
+            // Probe 2: Subaru SSM-over-CAN ECU (UDS DID 10AF → header 7E0)
+            val ssmResp = btManager.sendCommand(ObdPids.OIL_TEMP.cmd, 2000L)
+            if (ssmResp != null && ObdParser.parseUdsResponse(ssmResp, ObdPids.OIL_TEMP.cmd)?.isNotEmpty() == true) {
+                oilTempSource = OilTempSource.SSM_ECU
+                Log.d(TAG, "Probe 2: OIL_TEMP → SSM_ECU (${ObdPids.OIL_TEMP.cmd})")
+            }
+        }
+
+        // Probe 3: Subaru SSM-over-CAN TCU (UDS DID 1017 → header 7E1)
+        var tcuAvailable = false
+        if (btManager.sendCommand("ATSH7E1", profile.commandTimeoutMs) != null) {
+            delay(200)
+            val cvtResp = btManager.sendCommand(ObdPids.CVT_TEMP.cmd, 2000L)
+            if (cvtResp != null && ObdParser.parseUdsResponse(cvtResp, ObdPids.CVT_TEMP.cmd)?.isNotEmpty() == true) {
+                tcuAvailable = true
+                Log.d(TAG, "Probe 3: TCU available (${ObdPids.CVT_TEMP.cmd})")
+            }
+            btManager.sendCommand("ATSH7E0", profile.commandTimeoutMs)
+        }
+
+        return SensorProbeResult(oilTempSource, tcuAvailable)
     }
 
     // ── Active PID set ────────────────────────────────────────────────────────
 
-    private suspend fun buildActivePidSet(): Set<ObdPid> {
+    private suspend fun buildActivePidSet(probe: SensorProbeResult): Set<ObdPid> {
         val allCmds = mutableSetOf<String>()
         allCmds += userPreferences.gaugeSlots.first()
         allCmds += userPreferences.wideGaugeSlots.first()
@@ -204,6 +278,9 @@ class ObdQueryEngine @Inject constructor(
         allCmds += userPreferences.lsBotSlots.first()
         allCmds += userPreferences.lsBotWideSlots.first()
         allCmds += userPreferences.landscapeBottomSlots.first()
+
+        val vehicle = userPreferences.selectedVehicle.first()
+        val isTurbo = vehicle?.isTurbo ?: true  // default turbo-safe if vehicle unknown
 
         val active = mutableSetOf<ObdPid>()
 
@@ -216,17 +293,22 @@ class ObdQueryEngine @Inject constructor(
         // MAF used for fuel consumption computation
         active += ObdPids.MAF
 
-        // Critical sensors always polled for dashboard widgets and temperature alerts
+        // Critical sensors gated by probe availability
         active += ObdPids.INTAKE_TEMP
-        active += ObdPids.OIL_TEMP
-        active += ObdPids.CVT_TEMP
-        active += ObdPids.AWD_DUTY
+        if (probe.oilTempSource != OilTempSource.NONE) active += ObdPids.OIL_TEMP
+        if (probe.tcuAvailable) {
+            active += ObdPids.CVT_TEMP
+            active += ObdPids.AWD_DUTY
+        }
 
         // TPMS sentinel: if any slot shows the combined TPMS widget, include all 4 sensors
         if ("TPMS_ALL" in allCmds) active += ObdPids.TIER4
 
-        // All other tiered pids: include only if their cmd appears in a configured slot
-        val candidates = ObdPids.TIER2 + ObdPids.TIER3 + ObdPids.TIER4
+        // All other tiered pids: include only if their cmd appears in a configured slot,
+        // filtered by turbo capability and TCU availability
+        val candidates = (ObdPids.TIER2 + ObdPids.TIER3 + ObdPids.TIER4)
+            .filter { !it.isTurboOnly || isTurbo }
+            .filter { probe.tcuAvailable || it.header != "7E1" }
         for (pid in candidates) {
             if (pid.cmd in allCmds) active += pid
         }

@@ -72,6 +72,10 @@ class UserPreferences @Inject constructor(
         private val KEY_LS_BOT_WIDE_0 = stringPreferencesKey("ls_bot_wide_0")
         private val KEY_LS_BOT_WIDE_1 = stringPreferencesKey("ls_bot_wide_1")
         private val KEY_LS_BOT_MODE   = stringPreferencesKey("ls_bot_mode")
+
+        // ── Sensor probe cache ─────────────────────────────────────────────────
+        private val KEY_PROBE_OIL_SOURCE = stringPreferencesKey("probe_oil_source")
+        private val KEY_PROBE_TCU        = booleanPreferencesKey("probe_tcu")
     }
 
     // ── Vehicle & onboarding ──────────────────────────────────────────────────
@@ -338,6 +342,18 @@ class UserPreferences @Inject constructor(
 
     suspend fun setLsBotMode(mode: String) {
         dataStore.edit { it[KEY_LS_BOT_MODE] = mode }
+    }
+
+    // ── Sensor probe cache ────────────────────────────────────────────────────
+
+    val probeOilTempSource: Flow<String>  = dataStore.data.map { it[KEY_PROBE_OIL_SOURCE] ?: "NONE" }
+    val probeTcuAvailable: Flow<Boolean>  = dataStore.data.map { it[KEY_PROBE_TCU] ?: false }
+
+    suspend fun saveSensorProbe(oilTempSource: String, tcuAvailable: Boolean) {
+        dataStore.edit { prefs ->
+            prefs[KEY_PROBE_OIL_SOURCE] = oilTempSource
+            prefs[KEY_PROBE_TCU]        = tcuAvailable
+        }
     }
 
     // ── Fuel avg reset timestamp ──────────────────────────────────────────────

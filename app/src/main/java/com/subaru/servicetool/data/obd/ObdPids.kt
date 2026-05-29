@@ -84,7 +84,7 @@ object ObdPids {
     val AFR = ObdPid(
         cmd = "0124", name = "Air-Fuel Ratio", unit = "AFR",
         minVal = 7f, maxVal = 22f, group = PidGroup.FUEL,
-    ) { b -> if (b.size >= 2) 2f * (b[0] * 256 + b[1]).toFloat() / 65535f * 14.7f else null }
+    ) { b -> if (b.size >= 2) 2f * (b[0] * 256 + b[1]).toFloat() / 65536f * 14.7f else null }
 
     // Mode 01 PID 33 — absolute barometric pressure; used to derive manifold boost
     val BAROMETRIC_PRESS = ObdPid(

@@ -154,8 +154,10 @@ class ObdQueryEngine @Inject constructor(
                         if (pid == ObdPids.INTAKE_TEMP && resolvedValue == null && isConnected()) {
                             val fallback = btManager.sendCommand("0168", profile.commandTimeoutMs)
                             if (fallback != null) {
+                                // PID 68 byte A is a sensor-support bitmap; the first
+                                // intake-air-temperature reading is byte B (value − 40).
                                 resolvedValue = ObdParser.parseStandard(fallback, "0168")
-                                    ?.let { bytes -> if (bytes.isNotEmpty()) (bytes[0] - 40).toFloat() else null }
+                                    ?.let { bytes -> if (bytes.size >= 2) (bytes[1] - 40).toFloat() else null }
                             }
                         }
                         trackResult(pid, resolvedValue, current, consecutiveErrors, skipCycles)

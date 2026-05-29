@@ -56,6 +56,25 @@ object ObdParser {
     }
 
     /**
+     * Parses the single data byte from an SSM-over-CAN A8 read-address response.
+     * ECU responds with: [header] [len] E8 [addr_hi] [addr_mid] [addr_lo] [data_byte]
+     * Some adapters omit the address echo: [header] [len] E8 [data_byte]
+     * Returns null when the response is absent or contains an error.
+     */
+    fun parseSsmResponse(raw: String): Int? {
+        val tokens = tokenize(raw) ?: return null
+        val e8idx = tokens.indexOf("E8")
+        if (e8idx < 0) return null
+        // Long form: E8 addr_hi addr_mid addr_lo data (4 tokens after E8)
+        if (tokens.size > e8idx + 4) return tokens[e8idx + 4].toIntOrNull(16)
+        // Medium form: E8 addr_lo data (some adapters only echo low byte)
+        if (tokens.size > e8idx + 2) return tokens[e8idx + 2].toIntOrNull(16)
+        // Short form: E8 data (no address echo)
+        if (tokens.size > e8idx + 1) return tokens[e8idx + 1].toIntOrNull(16)
+        return null
+    }
+
+    /**
      * Parses a battery voltage response from the ATRV AT command (e.g. "14.2V >").
      * Not used in normal polling; kept for diagnostic / fallback use.
      */

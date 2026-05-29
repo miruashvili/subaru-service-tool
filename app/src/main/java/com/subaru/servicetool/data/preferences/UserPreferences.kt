@@ -76,6 +76,9 @@ class UserPreferences @Inject constructor(
         // ── Sensor probe cache ─────────────────────────────────────────────────
         private val KEY_PROBE_OIL_SOURCE = stringPreferencesKey("probe_oil_source")
         private val KEY_PROBE_TCU        = booleanPreferencesKey("probe_tcu")
+
+        // ── Debug ──────────────────────────────────────────────────────────────
+        private val KEY_SHOW_RAW_OBD = booleanPreferencesKey("show_raw_obd")
     }
 
     // ── Vehicle & onboarding ──────────────────────────────────────────────────
@@ -189,7 +192,7 @@ class UserPreferences @Inject constructor(
 
     // ── Gauge slots ───────────────────────────────────────────────────────────
 
-    private val defaultSlots = listOf("0105", "2184", "010C", "010D")
+    private val defaultSlots = listOf("0105", "221017", "010C", "010D")
 
     val gaugeSlots: Flow<List<String>> = dataStore.data.map { prefs ->
         listOf(
@@ -215,8 +218,8 @@ class UserPreferences @Inject constructor(
 
     val wideGaugeSlots: Flow<List<String>> = dataStore.data.map { prefs ->
         listOf(
-            prefs[KEY_GAUGE_WIDE_0] ?: "2122",    // AWD Transfer Duty (updated cmd)
-            prefs[KEY_GAUGE_WIDE_1] ?: "221501",  // Tire Pressure FL (updated cmd)
+            prefs[KEY_GAUGE_WIDE_0] ?: "221065",  // AWD Transfer Duty
+            prefs[KEY_GAUGE_WIDE_1] ?: "221501",  // Tire Pressure FL
         )
     }
 
@@ -266,16 +269,16 @@ class UserPreferences @Inject constructor(
 
     val lsTopSlots: Flow<List<String>> = dataStore.data.map { prefs ->
         listOf(
-            prefs[KEY_LS_TOP_0] ?: "0105",   // Coolant Temp
-            prefs[KEY_LS_TOP_1] ?: "2184",   // CVT Fluid Temp (updated cmd)
-            prefs[KEY_LS_TOP_2] ?: "010C",   // Engine RPM
-            prefs[KEY_LS_TOP_3] ?: "010D",   // Vehicle Speed
+            prefs[KEY_LS_TOP_0] ?: "0105",    // Coolant Temp
+            prefs[KEY_LS_TOP_1] ?: "221017",  // CVT Fluid Temp
+            prefs[KEY_LS_TOP_2] ?: "010C",    // Engine RPM
+            prefs[KEY_LS_TOP_3] ?: "010D",    // Vehicle Speed
         )
     }
 
     val lsMidSlots: Flow<List<String>> = dataStore.data.map { prefs ->
         listOf(
-            prefs[KEY_LS_MID_0] ?: "2122",      // AWD Distribution (updated cmd)
+            prefs[KEY_LS_MID_0] ?: "221065",    // AWD Transfer Duty
             prefs[KEY_LS_MID_1] ?: "FUEL_CONS", // Fuel Consumption
             prefs[KEY_LS_MID_2] ?: "010D",      // Vehicle Speed
         )
@@ -283,10 +286,10 @@ class UserPreferences @Inject constructor(
 
     val lsBotSlots: Flow<List<String>> = dataStore.data.map { prefs ->
         listOf(
-            prefs[KEY_LS_BOT_0] ?: "0104",  // Engine Load
-            prefs[KEY_LS_BOT_1] ?: "010C",  // Engine RPM
-            prefs[KEY_LS_BOT_2] ?: "0142",  // Battery Voltage
-            prefs[KEY_LS_BOT_3] ?: "2184",  // CVT Fluid Temp (updated cmd)
+            prefs[KEY_LS_BOT_0] ?: "0104",    // Engine Load
+            prefs[KEY_LS_BOT_1] ?: "010C",    // Engine RPM
+            prefs[KEY_LS_BOT_2] ?: "0142",    // Battery Voltage
+            prefs[KEY_LS_BOT_3] ?: "221017",  // CVT Fluid Temp
         )
     }
 
@@ -354,6 +357,14 @@ class UserPreferences @Inject constructor(
             prefs[KEY_PROBE_OIL_SOURCE] = oilTempSource
             prefs[KEY_PROBE_TCU]        = tcuAvailable
         }
+    }
+
+    // ── Debug ─────────────────────────────────────────────────────────────────
+
+    val showRawObd: Flow<Boolean> = dataStore.data.map { it[KEY_SHOW_RAW_OBD] ?: false }
+
+    suspend fun setShowRawObd(enabled: Boolean) {
+        dataStore.edit { it[KEY_SHOW_RAW_OBD] = enabled }
     }
 
     // ── Fuel avg reset timestamp ──────────────────────────────────────────────

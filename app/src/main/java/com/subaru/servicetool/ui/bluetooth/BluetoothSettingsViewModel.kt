@@ -17,6 +17,7 @@ import com.subaru.servicetool.data.bluetooth.BluetoothConnectionState
 import com.subaru.servicetool.data.bluetooth.OBDBluetoothManager
 import com.subaru.servicetool.data.bluetooth.OBDConnectionType
 import com.subaru.servicetool.data.obd.AdapterSpeedProfile
+import com.subaru.servicetool.data.preferences.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import androidx.compose.runtime.getValue
@@ -25,8 +26,10 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -41,10 +44,17 @@ data class BtDeviceItem(
 class BluetoothSettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     val obdManager: OBDBluetoothManager,
+    private val userPreferences: UserPreferences,
 ) : ViewModel() {
 
     val connectionState: StateFlow<BluetoothConnectionState> = obdManager.connectionState
     val adapterSpeedProfile: StateFlow<AdapterSpeedProfile> = obdManager.adapterSpeedProfile
+
+    val showRawObd: StateFlow<Boolean> = userPreferences.showRawObd
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    private val _rawObdLog = MutableStateFlow<List<String>>(emptyList())
+    val rawObdLog: StateFlow<List<String>> = _rawObdLog.asStateFlow()
 
     var connectingAddress by mutableStateOf<String?>(null)
         private set
@@ -93,6 +103,15 @@ class BluetoothSettingsViewModel @Inject constructor(
                 }
             }
         }
+        viewModelScope.launch {
+            obdManager.rawObdLog.collect { line ->
+                _rawObdLog.value = (_rawObdLog.value + line).takeLast(20)
+            }
+        }
+    }
+
+    fun setShowRawObd(enabled: Boolean) {
+        viewModelScope.launch { userPreferences.setShowRawObd(enabled) }
     }
 
     @SuppressLint("MissingPermission")

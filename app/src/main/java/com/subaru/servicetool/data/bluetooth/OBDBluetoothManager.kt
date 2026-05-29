@@ -70,6 +70,9 @@ class OBDBluetoothManager @Inject constructor(
     private val _incomingData = MutableSharedFlow<String>(extraBufferCapacity = 64)
     val incomingData: SharedFlow<String> = _incomingData.asSharedFlow()
 
+    private val _rawObdLog = MutableSharedFlow<String>(extraBufferCapacity = 32)
+    val rawObdLog: SharedFlow<String> = _rawObdLog.asSharedFlow()
+
     private val _adapterSpeedProfile = MutableStateFlow(AdapterSpeedProfile.MEDIUM)
     val adapterSpeedProfile: StateFlow<AdapterSpeedProfile> = _adapterSpeedProfile.asStateFlow()
 
@@ -355,6 +358,7 @@ class OBDBluetoothManager @Inject constructor(
                     if (bleBuffer.contains('>')) {
                         val response = bleBuffer.toString().trim()
                         bleBuffer.clear()
+                        _rawObdLog.tryEmit(response)
                         if (commandActive.get()) cmdResponseChannel.trySend(response)
                         else _incomingData.tryEmit(response)
                     }
@@ -419,6 +423,7 @@ class OBDBluetoothManager @Inject constructor(
                 if (sb.contains('>')) {
                     val response = sb.toString().trim()
                     sb.clear()
+                    _rawObdLog.tryEmit(response)
                     if (commandActive.get()) cmdResponseChannel.trySend(response)
                     else _incomingData.tryEmit(response)
                 }

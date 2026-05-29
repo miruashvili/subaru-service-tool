@@ -19,7 +19,17 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "ObdQueryEngine"
-private const val TCU_READ_TIMEOUT_MS = 2000L
+
+// SSM A8 single-address read: adapter needs extra time after ATSH switch
+private const val SSM_SETTLE_MS        = 300L
+// Per-PID timeout for SSM A8 reads (ECU is slower than standard OBD-II)
+private const val SSM_TIMEOUT_MS       = 2_000L
+// Retry pause when a module PID times out
+private const val MODULE_RETRY_PAUSE_MS = 500L
+// Number of consecutive module-batch failures before the batch is suspended
+private const val MODULE_FAIL_THRESHOLD = 3
+// How many cycles to skip a failed module batch
+private const val MODULE_SKIP_CYCLES    = 20
 
 @Singleton
 class ObdQueryEngine @Inject constructor(
@@ -69,66 +79,65 @@ class ObdQueryEngine @Inject constructor(
             val probeResult = loadOrRunProbe()
             val activePids  = buildActivePidSet(probeResult)
 
-            val consecutiveErrors   = mutableMapOf<String, Int>()
-            val skipCycles          = mutableMapOf<String, Int>()
-            val recentCycleTimes    = ArrayDeque<Long>()
-            var baselineCycleTime   = -1L
-            var fastCycleCount      = 0
+            // Per-PID error/skip tracking
+            val consecutiveErrors = mutableMapOf<String, Int>()
+            val skipCycles        = mutableMapOf<String, Int>()
+            // Per-module-header failure tracking (independent from per-PID)
+            val moduleFailures    = mutableMapOf<String, Int>()
+            val moduleSkipCycles  = mutableMapOf<String, Int>()
+
+            val recentCycleTimes  = ArrayDeque<Long>()
+            var baselineCycleTime = -1L
+            var fastCycleCount    = 0
             var consecutiveTimeouts = 0
-            var cycle               = 0
+            var cycle = 0
 
             while (isConnected()) {
                 val profile    = btManager.adapterSpeedProfile.value
                 val cycleStart = System.currentTimeMillis()
 
-                // Tick down skip counters; remove expired entries
+                // Tick down per-PID skip counters
                 skipCycles.keys.toList().forEach { key ->
                     val remaining = (skipCycles[key] ?: 0) - 1
                     if (remaining <= 0) { skipCycles.remove(key); consecutiveErrors.remove(key) }
                     else skipCycles[key] = remaining
+                }
+                // Tick down per-module skip counters
+                moduleSkipCycles.keys.toList().forEach { header ->
+                    val remaining = (moduleSkipCycles[header] ?: 0) - 1
+                    if (remaining <= 0) { moduleSkipCycles.remove(header); moduleFailures.remove(header) }
+                    else moduleSkipCycles[header] = remaining
                 }
 
                 // Determine which tiers fire this cycle
                 val t1 = ObdPids.TIER1.filter { it in activePids && !isSkipped(it, skipCycles) }
                 val t2 = if (cycle % profile.tier2Every == 0)
                     ObdPids.TIER2.filter { it in activePids && !isSkipped(it, skipCycles) }
-                    else emptyList()
+                else emptyList()
                 val t3 = if (cycle % profile.tier3Every == 0)
                     ObdPids.TIER3.filter { it in activePids && !isSkipped(it, skipCycles) }
-                    else emptyList()
+                else emptyList()
                 val t4 = if (cycle % profile.tier4Every == 0)
                     ObdPids.TIER4.filter { it in activePids && !isSkipped(it, skipCycles) }
-                    else emptyList()
+                else emptyList()
+
+                val allDue = t2 + t3 + t4
 
                 // Group non-ECM module PIDs for header-switching batches (7E1, 7D4, …)
-                // Skip 7E1 (TCU) entirely when probe determined TCU is absent on this vehicle
-                val allDue          = t2 + t3 + t4
                 val modulePidGroups = allDue
                     .filter { pid ->
                         pid.header != null && pid.header != "7E0" &&
-                        (pid.header != "7E1" || probeResult.tcuAvailable)
+                        (pid.header != "7E1" || probeResult.tcuAvailable) &&
+                        (moduleSkipCycles[pid.header] ?: 0) == 0
                     }
                     .groupBy { it.header!! }
-                val regularPids     = t1 + allDue.filter { it.header == null || it.header == "7E0" }
+                val regularPids = t1 + allDue.filter { it.header == null || it.header == "7E0" }
 
-                // ── Regular PIDs (standard OBD + ECM) ────────────────────────
+                // ── Regular PIDs (standard OBD-II + ECM SSM A8) ──────────────
                 for (pid in regularPids) {
                     if (!isConnected()) break
-                    val timeout = if (pid.cmd == ObdPids.OIL_TEMP.cmd) 2000L else profile.commandTimeoutMs
 
-                    // OIL_TEMP: route to the probed physical source
-                    val response: String?
-                    var value: Float?
-                    if (pid == ObdPids.OIL_TEMP && probeResult.oilTempSource == OilTempSource.OBD_STANDARD) {
-                        response = btManager.sendCommand("015C", timeout)
-                        value = response?.let {
-                            ObdParser.parseStandard(it, "015C")
-                                ?.let { bytes -> if (bytes.isNotEmpty()) (bytes[0] - 40).toFloat() else null }
-                        }
-                    } else {
-                        response = btManager.sendCommand(pid.cmd, timeout)
-                        value = response?.let { parsePid(pid, it) }
-                    }
+                    val (response, value) = queryRegularPid(pid, probeResult, profile)
 
                     if (response == null) {
                         consecutiveTimeouts++
@@ -139,20 +148,22 @@ class ObdQueryEngine @Inject constructor(
                         }
                     } else {
                         consecutiveTimeouts = 0
+                        var resolvedValue = value
+
                         // IAT fallback: some adapters return NO DATA for 010F — try 0168
-                        if (pid == ObdPids.INTAKE_TEMP && value == null && isConnected()) {
+                        if (pid == ObdPids.INTAKE_TEMP && resolvedValue == null && isConnected()) {
                             val fallback = btManager.sendCommand("0168", profile.commandTimeoutMs)
                             if (fallback != null) {
-                                value = ObdParser.parseStandard(fallback, "0168")
+                                resolvedValue = ObdParser.parseStandard(fallback, "0168")
                                     ?.let { bytes -> if (bytes.isNotEmpty()) (bytes[0] - 40).toFloat() else null }
                             }
                         }
-                        trackResult(pid, value, current, consecutiveErrors, skipCycles)
+                        trackResult(pid, resolvedValue, current, consecutiveErrors, skipCycles)
                     }
                     if (profile.delayBetweenPidsMs > 0L) delay(profile.delayBetweenPidsMs)
                 }
 
-                // ── Per-module batches (TCM 7E1, BCM 7D4, …) ─────────────────
+                // ── Per-module batches (TCU 7E1, BCM 7D4, …) ─────────────────
                 for ((header, pids) in modulePidGroups) {
                     if (pids.isEmpty() || !isConnected()) continue
                     val ok = batchQueryModule(header, pids, profile, current, consecutiveErrors, skipCycles)
@@ -163,8 +174,15 @@ class ObdQueryEngine @Inject constructor(
                             btManager.reinitializeElm327()
                             consecutiveTimeouts = 0
                         }
+                        val fails = (moduleFailures[header] ?: 0) + 1
+                        moduleFailures[header] = fails
+                        if (fails >= MODULE_FAIL_THRESHOLD) {
+                            Log.w(TAG, "Module $header failed $fails times — skipping for $MODULE_SKIP_CYCLES cycles")
+                            moduleSkipCycles[header] = MODULE_SKIP_CYCLES
+                        }
                     } else {
                         consecutiveTimeouts = 0
+                        moduleFailures.remove(header)
                     }
                 }
 
@@ -215,7 +233,6 @@ class ObdQueryEngine @Inject constructor(
 
     // ── Sensor probe ──────────────────────────────────────────────────────────
 
-    /** Returns cached probe result (DataStore → memory), running the probe if no cache exists. */
     private suspend fun loadOrRunProbe(): SensorProbeResult {
         cachedProbe?.let { return it }
 
@@ -237,30 +254,42 @@ class ObdQueryEngine @Inject constructor(
     private suspend fun runSensorProbe(): SensorProbeResult {
         val profile = btManager.adapterSpeedProfile.value
 
-        // Probe 1: standard OBD-II Mode 01 PID 5C (engine oil temp)
+        // Probe 1: standard OBD-II Mode 01 PID 5C
         var oilTempSource = OilTempSource.NONE
-        val stdResp = btManager.sendCommand("015C", 2000L)
+        val stdResp = btManager.sendCommand("015C", SSM_TIMEOUT_MS)
         if (stdResp != null && ObdParser.parseStandard(stdResp, "015C")?.isNotEmpty() == true) {
             oilTempSource = OilTempSource.OBD_STANDARD
             Log.d(TAG, "Probe 1: OIL_TEMP → OBD_STANDARD (015C)")
-        } else {
-            // Probe 2: Subaru SSM-over-CAN ECU (UDS DID 10AF → header 7E0)
-            val ssmResp = btManager.sendCommand(ObdPids.OIL_TEMP.cmd, 2000L)
-            if (ssmResp != null && ObdParser.parseUdsResponse(ssmResp, ObdPids.OIL_TEMP.cmd)?.isNotEmpty() == true) {
+        }
+
+        if (oilTempSource == OilTempSource.NONE) {
+            // Probe 2: SSM A8 read at ECU address 0x0000AF
+            val ssmResp = btManager.sendCommand(buildSsmA8Command(0x0000AF), SSM_TIMEOUT_MS)
+            if (ssmResp != null && ObdParser.parseSsmResponse(ssmResp) != null) {
                 oilTempSource = OilTempSource.SSM_ECU
-                Log.d(TAG, "Probe 2: OIL_TEMP → SSM_ECU (${ObdPids.OIL_TEMP.cmd})")
+                Log.d(TAG, "Probe 2: OIL_TEMP → SSM_ECU (0x0000AF)")
             }
         }
 
-        // Probe 3: Subaru SSM-over-CAN TCU (UDS DID 1017 → header 7E1)
+        if (oilTempSource == OilTempSource.NONE) {
+            // Probe 3: SSM A8 alternate ECU address 0x009D5C
+            val ssmResp2 = btManager.sendCommand(buildSsmA8Command(0x009D5C), SSM_TIMEOUT_MS)
+            if (ssmResp2 != null && ObdParser.parseSsmResponse(ssmResp2) != null) {
+                oilTempSource = OilTempSource.SSM_ECU_ALT
+                Log.d(TAG, "Probe 3: OIL_TEMP → SSM_ECU_ALT (0x009D5C)")
+            }
+        }
+
+        // Probe 4: TCU via SSM A8 to header 7E1
         var tcuAvailable = false
         if (btManager.sendCommand("ATSH7E1", profile.commandTimeoutMs) != null) {
-            delay(200)
-            val cvtResp = btManager.sendCommand(ObdPids.CVT_TEMP.cmd, 2000L)
-            if (cvtResp != null && ObdParser.parseUdsResponse(cvtResp, ObdPids.CVT_TEMP.cmd)?.isNotEmpty() == true) {
+            delay(SSM_SETTLE_MS)
+            val cvtResp = btManager.sendCommand(buildSsmA8Command(0x001017), SSM_TIMEOUT_MS)
+            if (cvtResp != null && ObdParser.parseSsmResponse(cvtResp) != null) {
                 tcuAvailable = true
-                Log.d(TAG, "Probe 3: TCU available (${ObdPids.CVT_TEMP.cmd})")
+                Log.d(TAG, "Probe 4: TCU available (SSM A8 0x001017 @ 7E1)")
             }
+            // Always restore ECM header
             btManager.sendCommand("ATSH7E0", profile.commandTimeoutMs)
         }
 
@@ -280,32 +309,23 @@ class ObdQueryEngine @Inject constructor(
         allCmds += userPreferences.landscapeBottomSlots.first()
 
         val vehicle = userPreferences.selectedVehicle.first()
-        val isTurbo = vehicle?.isTurbo ?: true  // default turbo-safe if vehicle unknown
+        val isTurbo = vehicle?.isTurbo ?: true
 
         val active = mutableSetOf<ObdPid>()
 
-        // TIER1 always polled — critical real-time readouts
         active += ObdPids.TIER1
-
-        // Ambient temp feeds the landscape nav bar thermometer regardless of slots
         active += ObdPids.AMBIENT_TEMP
-
-        // MAF used for fuel consumption computation
         active += ObdPids.MAF
-
-        // Critical sensors gated by probe availability
         active += ObdPids.INTAKE_TEMP
+
         if (probe.oilTempSource != OilTempSource.NONE) active += ObdPids.OIL_TEMP
         if (probe.tcuAvailable) {
             active += ObdPids.CVT_TEMP
             active += ObdPids.AWD_DUTY
         }
 
-        // TPMS sentinel: if any slot shows the combined TPMS widget, include all 4 sensors
         if ("TPMS_ALL" in allCmds) active += ObdPids.TIER4
 
-        // All other tiered pids: include only if their cmd appears in a configured slot,
-        // filtered by turbo capability and TCU availability
         val candidates = (ObdPids.TIER2 + ObdPids.TIER3 + ObdPids.TIER4)
             .filter { !it.isTurboOnly || isTurbo }
             .filter { probe.tcuAvailable || it.header != "7E1" }
@@ -313,15 +333,61 @@ class ObdQueryEngine @Inject constructor(
             if (pid.cmd in allCmds) active += pid
         }
 
-        // Android Auto car screen — only active while car screen is shown
         active += _carActivePids.value
 
         Log.d(TAG, "Active PIDs: ${active.joinToString { it.name }}")
         return active
     }
 
-    // ── Module batch query (any non-ECM header: 7E1, 7D4, …) ─────────────────
+    // ── Regular PID query (standard OBD-II + ECM SSM A8) ─────────────────────
 
+    /**
+     * Issues the correct command for [pid] and returns the raw response plus the parsed value.
+     * OIL_TEMP is routed to the probed physical source; all other SSM PIDs use the A8 command
+     * built from [ObdPid.ssmAddress].
+     */
+    private suspend fun queryRegularPid(
+        pid: ObdPid,
+        probe: SensorProbeResult,
+        profile: AdapterSpeedProfile,
+    ): Pair<String?, Float?> {
+        val timeout = if (pid.ssmAddress != null) SSM_TIMEOUT_MS else profile.commandTimeoutMs
+
+        if (pid == ObdPids.OIL_TEMP) {
+            return when (probe.oilTempSource) {
+                OilTempSource.OBD_STANDARD -> {
+                    val resp = btManager.sendCommand("015C", timeout)
+                    val v = resp?.let {
+                        ObdParser.parseStandard(it, "015C")
+                            ?.let { b -> if (b.isNotEmpty()) (b[0] - 40).toFloat() else null }
+                    }
+                    resp to v
+                }
+                OilTempSource.SSM_ECU -> {
+                    // Uses pid.ssmAddress = 0x0000AF
+                    val resp = btManager.sendCommand(buildSsmA8Command(0x0000AF), timeout)
+                    resp to resp?.let { parsePid(pid, it) }
+                }
+                OilTempSource.SSM_ECU_ALT -> {
+                    // Alternate memory address; parser is address-agnostic
+                    val resp = btManager.sendCommand(buildSsmA8Command(0x009D5C), timeout)
+                    resp to resp?.let { parsePid(pid, it) }
+                }
+                OilTempSource.NONE -> null to null
+            }
+        }
+
+        val cmd  = if (pid.ssmAddress != null) buildSsmA8Command(pid.ssmAddress) else pid.cmd
+        val resp = btManager.sendCommand(cmd, timeout)
+        return resp to resp?.let { parsePid(pid, it) }
+    }
+
+    // ── Module batch query (TCU 7E1, BCM 7D4, …) ─────────────────────────────
+
+    /**
+     * Switches to [header], queries all [pids] via SSM A8 (or their native cmd), then
+     * restores the ECM header (7E0). Returns true if at least one PID was read successfully.
+     */
     private suspend fun batchQueryModule(
         header: String,
         pids: List<ObdPid>,
@@ -330,39 +396,65 @@ class ObdQueryEngine @Inject constructor(
         consecutiveErrors: MutableMap<String, Int>,
         skipCycles: MutableMap<String, Int>,
     ): Boolean {
-        // Switch to module header; bail immediately on timeout
         if (btManager.sendCommand("ATSH$header", profile.commandTimeoutMs) == null) {
+            Log.w(TAG, "ATSH$header timed out — skipping module batch")
             btManager.sendCommand("ATSH7E0", profile.commandTimeoutMs)
             return false
         }
-        delay(200) // adapter needs extra settling time after header switch
+        // Give the adapter time to settle after a header switch
+        delay(SSM_SETTLE_MS)
 
         var anyRead = false
         for (pid in pids) {
             if (!isConnected()) break
-            var response = btManager.sendCommand(pid.cmd, TCU_READ_TIMEOUT_MS)
+            val cmd = if (pid.ssmAddress != null) buildSsmA8Command(pid.ssmAddress) else pid.cmd
+            var response = btManager.sendCommand(cmd, SSM_TIMEOUT_MS)
             if (response == null) {
-                delay(500) // retry once after brief pause
-                response = btManager.sendCommand(pid.cmd, TCU_READ_TIMEOUT_MS)
+                delay(MODULE_RETRY_PAUSE_MS)
+                response = btManager.sendCommand(cmd, SSM_TIMEOUT_MS)
             }
             if (response == null) continue
-            val value = ObdParser.parseUdsResponse(response, pid.cmd)?.let { pid.parse(it) }
+            val value = if (pid.ssmAddress != null) {
+                ObdParser.parseSsmResponse(response)?.let { v -> pid.parse(listOf(v)) }
+            } else {
+                ObdParser.parseUdsResponse(response, pid.cmd)?.let { pid.parse(it) }
+            }
             trackResult(pid, value, current, consecutiveErrors, skipCycles)
             anyRead = true
             if (profile.delayBetweenPidsMs > 0L) delay(profile.delayBetweenPidsMs)
         }
 
-        // Always restore ECM header
+        // Always restore ECM header regardless of read outcome
         btManager.sendCommand("ATSH7E0", profile.commandTimeoutMs)
         return anyRead
     }
 
-    // ── Query helpers ─────────────────────────────────────────────────────────
+    // ── SSM A8 command builder ────────────────────────────────────────────────
+
+    /**
+     * Builds an SSM-over-CAN read-single-address command:
+     *   05 A8 00 [addr_hi] [addr_mid] [addr_lo]
+     *
+     * `05` = ISO 15765-4 single-frame PCI byte (5 data bytes following).
+     * `A8` = Subaru SSM read-address service ID.
+     * `00` = flags / sub-function (always 0 for single read).
+     * The 3-byte address follows MSB-first.
+     */
+    private fun buildSsmA8Command(address: Int): String {
+        val hi  = (address shr 16) and 0xFF
+        val mid = (address shr 8) and 0xFF
+        val lo  = address and 0xFF
+        return "05A800%02X%02X%02X".format(hi, mid, lo)
+    }
+
+    // ── Parse helpers ─────────────────────────────────────────────────────────
 
     private fun parsePid(pid: ObdPid, response: String): Float? {
+        if (pid.ssmAddress != null) {
+            return ObdParser.parseSsmResponse(response)?.let { v -> pid.parse(listOf(v)) }
+        }
         val mode = pid.cmd.take(2).toIntOrNull(16) ?: return null
         return if (mode > 9) {
-            // Mode 21 (Subaru SSM local-id) and Mode 22 (UDS) both use parseUdsResponse
             ObdParser.parseUdsResponse(response, pid.cmd)?.let { pid.parse(it) }
         } else {
             ObdParser.parseStandard(response, pid.cmd)?.let { pid.parse(it) }
@@ -384,8 +476,15 @@ class ObdQueryEngine @Inject constructor(
             val errors = (consecutiveErrors[pid.cmd] ?: 0) + 1
             consecutiveErrors[pid.cmd] = errors
             if (errors >= 3) {
-                val skipFor = if (pid.header != null && pid.header != "7E0") 20 else 10
-                Log.d(TAG, "Skipping ${pid.name} for $skipFor cycles after 3 consecutive parse errors")
+                val skipFor = when {
+                    pid.ssmAddress != null -> {
+                        Log.i(TAG, "Sensor ${pid.name} not supported on this ECU — stopped polling")
+                        9999
+                    }
+                    pid.header != null && pid.header != "7E0" -> MODULE_SKIP_CYCLES
+                    else -> 10
+                }
+                Log.d(TAG, "Skipping ${pid.name} for $skipFor cycles after 3 consecutive NO DATA")
                 skipCycles[pid.cmd] = skipFor
             }
         }
@@ -393,6 +492,8 @@ class ObdQueryEngine @Inject constructor(
 
     private fun isSkipped(pid: ObdPid, skipCycles: Map<String, Int>): Boolean =
         (skipCycles[pid.cmd] ?: 0) > 0
+
+    // ── DTC ───────────────────────────────────────────────────────────────────
 
     fun requestDtcRefresh() {
         scope.launch { queryDtcs() }

@@ -3,7 +3,7 @@ package com.subaru.servicetool.data.obd
 enum class PidGroup { ENGINE, TEMPERATURE, FUEL, MISC, TRANSMISSION }
 
 /** Which physical source the polling engine actually queries for engine oil temperature. */
-enum class OilTempSource { OBD_STANDARD, SSM_ECU, NONE }
+enum class OilTempSource { OBD_STANDARD, SSM_ECU, SSM_ECU_ALT, NONE }
 
 /** Cached result of the first-connect sensor probe. */
 data class SensorProbeResult(
@@ -24,5 +24,6 @@ data class ObdPid(
     val group: PidGroup = PidGroup.MISC,
     val header: String? = null,        // non-null → switch ATSH before query, restore 7E0 after
     val isTurboOnly: Boolean = false,  // excluded from active set on NA vehicles
+    val ssmAddress: Int? = null,       // non-null → use SSM-over-CAN A8 protocol instead of cmd
     val parse: (List<Int>) -> Float?,
 )

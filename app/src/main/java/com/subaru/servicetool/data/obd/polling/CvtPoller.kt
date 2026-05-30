@@ -2,6 +2,7 @@ package com.subaru.servicetool.data.obd.polling
 
 import android.util.Log
 import com.subaru.servicetool.data.bluetooth.OBDBluetoothManager
+import com.subaru.servicetool.data.bluetooth.adapter.AdapterProfileManager
 import com.subaru.servicetool.data.obd.CapabilitySnapshot
 import com.subaru.servicetool.data.obd.ObdCapabilityProber
 import com.subaru.servicetool.data.obd.ObdPids
@@ -37,7 +38,8 @@ class CvtPoller(
     private val moduleHeaderMutex: Mutex,
     private val singleReadMode: AtomicBoolean,
     private val onBatchFailed: () -> Unit,
-) : BasePoller(btManager, capabilityProber, sensorRegistry, sensorValues) {
+    profileManager: AdapterProfileManager? = null,
+) : BasePoller(btManager, capabilityProber, sensorRegistry, sensorValues, profileManager) {
 
     override val tag = "CvtPoller"
 

@@ -3,6 +3,7 @@ package com.subaru.servicetool.data.obd
 import android.util.Log
 import com.subaru.servicetool.data.bluetooth.BluetoothConnectionState
 import com.subaru.servicetool.data.bluetooth.OBDBluetoothManager
+import com.subaru.servicetool.data.bluetooth.adapter.AdapterProfileManager
 import com.subaru.servicetool.data.obd.discovery.ModuleDiscoveryService
 import com.subaru.servicetool.data.obd.polling.AwdPoller
 import com.subaru.servicetool.data.obd.polling.CvtPoller
@@ -55,6 +56,7 @@ class ObdQueryEngine @Inject constructor(
     private val capabilityProber: ObdCapabilityProber,
     private val sensorRegistry: SensorRegistry,
     private val moduleDiscovery: ModuleDiscoveryService,
+    private val adapterProfileManager: AdapterProfileManager,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -73,6 +75,12 @@ class ObdQueryEngine @Inject constructor(
 
     /** Live runtime module map from [ModuleDiscoveryService]. Populated after first connect. */
     val discoveredModules get() = moduleDiscovery.modules
+
+    /** Live adapter diagnostics (RTT, batch tiers, timeouts, retries). */
+    val adapterDiagnostics get() = adapterProfileManager.diagnostics.snapshot
+
+    /** Detected adapter type. */
+    val adapterType get() = adapterProfileManager.adapterType
 
     private var pollJob: Job? = null
     private var cachedSnapshot: CapabilitySnapshot? = null
@@ -93,9 +101,11 @@ class ObdQueryEngine @Inject constructor(
     // Poller instances — created once, reused across connections.
     private val enginePoller = EnginePoller(
         btManager, capabilityProber, sensorRegistry, _sensorValues, singleReadMode, onBatchFailed,
+        profileManager = adapterProfileManager,
     )
     private val cvtPoller = CvtPoller(
         btManager, capabilityProber, sensorRegistry, _sensorValues, moduleHeaderMutex, singleReadMode, onBatchFailed,
+        profileManager = adapterProfileManager,
     )
     private val awdPoller = AwdPoller(
         btManager, capabilityProber, sensorRegistry, _sensorValues, moduleHeaderMutex,
@@ -131,6 +141,17 @@ class ObdQueryEngine @Inject constructor(
 
             singleReadMode.set(userPreferences.adapterSingleRead.first())
             Log.i(TAG, "Polling started — singleReadMode=${singleReadMode.get()}")
+
+            // ── Adapter detection ── identify hardware before probing or polling ──
+            Log.i(TAG, "Running adapter detection")
+            try {
+                adapterProfileManager.detect(btManager.lastDeviceName)
+                Log.i(TAG, "Adapter: ${adapterProfileManager.adapterType.value.displayName} " +
+                    "maxBatch=${adapterProfileManager.activeCapabilities.maxBatchAddresses} " +
+                    "timeout=${adapterProfileManager.activeCapabilities.defaultTimeoutMs}ms")
+            } catch (e: Exception) {
+                Log.e(TAG, "Adapter detection failed — using UNKNOWN profile: ${e.message}", e)
+            }
 
             val snapshot = loadOrRunSnapshot()
             _detectedSensorCount.value =
@@ -207,6 +228,7 @@ class ObdQueryEngine @Inject constructor(
         cachedSnapshot = null
         sensorRegistry.reset()
         moduleDiscovery.reset()
+        adapterProfileManager.reset()
         Log.i(TAG, "Polling stopped — all pollers cancelled, registries reset")
     }
 

@@ -86,6 +86,9 @@ class OBDBluetoothManager @Inject constructor(
 
     var lastDeviceMac: String? = null; private set
     var lastConnectionType: OBDConnectionType? = null; private set
+    /** BLE or SPP device name at connection time; used by [adapter.AdapterDetector]. */
+    @SuppressLint("MissingPermission")
+    var lastDeviceName: String? = null; private set
     private var reconnectAttempts = 0
     private var shouldAutoReconnect = false
 
@@ -130,7 +133,8 @@ class OBDBluetoothManager @Inject constructor(
         if (!connectionLock.compareAndSet(false, true)) return
         shouldAutoReconnect = true
         reconnectAttempts = 0
-        lastDeviceMac = device.address
+        lastDeviceMac  = device.address
+        lastDeviceName = device.name
         lastConnectionType = OBDConnectionType.BLE
         activeConnectionJob = scope.launch {
             scope.launch { userPreferences.saveLastDevice(device.address, OBDConnectionType.BLE) }
@@ -155,7 +159,8 @@ class OBDBluetoothManager @Inject constructor(
         if (!connectionLock.compareAndSet(false, true)) return
         shouldAutoReconnect = true
         reconnectAttempts = 0
-        lastDeviceMac = device.address
+        lastDeviceMac  = device.address
+        lastDeviceName = device.name
         lastConnectionType = OBDConnectionType.SPP
         activeConnectionJob = scope.launch {
             scope.launch { userPreferences.saveLastDevice(device.address, OBDConnectionType.SPP) }

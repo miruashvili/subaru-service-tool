@@ -3,6 +3,7 @@ package com.subaru.servicetool.data.obd.polling
 import android.util.Log
 import com.subaru.servicetool.data.bluetooth.BluetoothConnectionState
 import com.subaru.servicetool.data.bluetooth.OBDBluetoothManager
+import com.subaru.servicetool.data.bluetooth.adapter.AdapterProfileManager
 import com.subaru.servicetool.data.obd.AdapterSpeedProfile
 import com.subaru.servicetool.data.obd.ObdCapabilityProber
 import com.subaru.servicetool.data.obd.ObdParser
@@ -33,6 +34,8 @@ abstract class BasePoller(
     protected val capabilityProber: ObdCapabilityProber,
     protected val sensorRegistry: SensorRegistry,
     protected val sensorValues: MutableStateFlow<Map<String, Float>>,
+    /** Null only for pollers that never use SSM batch reads (AwdPoller, TpmsPoller). */
+    protected val adapterProfileManager: AdapterProfileManager? = null,
 ) {
     protected abstract val tag: String
 
@@ -118,19 +121,31 @@ abstract class BasePoller(
     }
 
     /**
-     * Batch SSM A8 read for [pids]. Falls back to sequential single reads if
-     * [allowBatch] is false or if the batch response is malformed.
-     * [onBatchFailed] is invoked once if the first batch read fails and single-read
-     * mode should be persisted.
+     * Batch SSM A8 read for [pids] using the three-tier fallback chain from
+     * [AdapterProfileManager]: FULL_BATCH → HALF_BATCH → SINGLE_READ.
+     *
+     * A module is NEVER disabled due to a timeout at any tier. If [adapterProfileManager]
+     * is not wired to this poller, falls back to the legacy allowBatch path.
      */
     protected suspend fun querySsmBatch(
         pids: List<ObdPid>,
-        allowBatch: Boolean,
+        allowBatch: Boolean = true,
         onBatchFailed: (() -> Unit)? = null,
     ): Map<ObdPid, Float?> {
         if (pids.isEmpty()) return emptyMap()
         val addresses = pids.map { requireNotNull(it.ssmAddress) { "${it.name} has no ssmAddress" } }
-        val result    = capabilityProber.readSsmBatch(addresses, allowBatch)
+
+        val manager = adapterProfileManager
+        if (manager != null) {
+            val result = manager.readSsmWithFallback(addresses)
+            Log.d(tag, "querySsmBatch tier=${result.tier} got=${result.values.size}/${addresses.size}")
+            return pids.associateWith { pid ->
+                result.values[pid.ssmAddress]?.let { v -> pid.parse(listOf(v)) }
+            }
+        }
+
+        // Legacy path (no profile manager injected)
+        val result = capabilityProber.readSsmBatch(addresses, allowBatch)
         if (result.batchFailed) onBatchFailed?.invoke()
         return pids.associateWith { pid ->
             result.values[pid.ssmAddress]?.let { v -> pid.parse(listOf(v)) }

@@ -2,6 +2,7 @@ package com.subaru.servicetool.data.obd.polling
 
 import android.util.Log
 import com.subaru.servicetool.data.bluetooth.OBDBluetoothManager
+import com.subaru.servicetool.data.bluetooth.adapter.AdapterProfileManager
 import com.subaru.servicetool.data.obd.AdapterSpeedProfile
 import com.subaru.servicetool.data.obd.CapabilitySnapshot
 import com.subaru.servicetool.data.obd.CapabilityState
@@ -37,7 +38,8 @@ class EnginePoller(
     sensorValues: MutableStateFlow<Map<String, Float>>,
     private val singleReadMode: AtomicBoolean,
     private val onBatchFailed: () -> Unit,
-) : BasePoller(btManager, capabilityProber, sensorRegistry, sensorValues) {
+    profileManager: AdapterProfileManager? = null,
+) : BasePoller(btManager, capabilityProber, sensorRegistry, sensorValues, profileManager) {
 
     override val tag = "EnginePoller"
 

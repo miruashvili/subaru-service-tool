@@ -34,6 +34,7 @@ class ObdQueryEngine @Inject constructor(
     private val btManager: OBDBluetoothManager,
     private val userPreferences: UserPreferences,
     private val capabilityProber: ObdCapabilityProber,
+    private val sensorRegistry: SensorRegistry,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -299,7 +300,8 @@ class ObdQueryEngine @Inject constructor(
         _sensorValues.value = emptyMap()
         _dtcCount.value = 0
         cachedProbe = null
-        Log.i(TAG, "Polling stopped — sensor map cleared")
+        sensorRegistry.reset()
+        Log.i(TAG, "Polling stopped — sensor map cleared, registry reset to UNKNOWN")
     }
 
     private fun registerModuleFailure(
@@ -448,79 +450,42 @@ class ObdQueryEngine @Inject constructor(
     // ── Active PID set ────────────────────────────────────────────────────────
 
     /**
-     * Builds the set of PIDs to poll this session.
+     * Builds the set of PIDs to poll this session from the [SensorRegistry].
      *
-     * Capability probe results are NOT used to exclude any PID. The only filters applied are:
-     *   1. Vehicle type (isTurboOnly flag) — turbo-only PIDs are excluded for NA engines.
-     *   2. User gauge slot configuration — TIER2/3/4 PIDs not in any configured slot are excluded.
+     * Every sensor registered in [SensorRegistry] is polled unconditionally.
+     * Dashboard visibility and gauge slot configuration have no effect here — they
+     * control only which values the UI displays, not which values are collected.
      *
-     * TIER1, OIL_TEMP, CVT_TEMP, AWD_DUTY, AMBIENT_TEMP, MAF, and INTAKE_TEMP are always
-     * included regardless of probe state or gauge configuration.
+     * The only filter applied is vehicle type: [ObdPid.isTurboOnly] PIDs are excluded
+     * for NA engines. Capability probe results remain advisory only.
      */
     private suspend fun buildActivePidSet(probe: ProbeResult): Set<ObdPid> {
-        val allCmds = mutableSetOf<String>()
-        allCmds += userPreferences.gaugeSlots.first()
-        allCmds += userPreferences.wideGaugeSlots.first()
-        allCmds += userPreferences.lsTopSlots.first()
-        allCmds += userPreferences.lsMidSlots.first()
-        allCmds += userPreferences.lsBotSlots.first()
-        allCmds += userPreferences.lsBotWideSlots.first()
-        allCmds += userPreferences.landscapeBottomSlots.first()
-
         val vehicle = userPreferences.selectedVehicle.first()
         val isTurbo = vehicle?.isTurbo ?: true
 
-        val active = mutableSetOf<ObdPid>()
-
-        // TIER1 — always polled every cycle
-        active += ObdPids.TIER1
-        Log.d(TAG, "buildActivePidSet: added TIER1 (${ObdPids.TIER1.size} PIDs, always on)")
-
-        // Core sensors — always included regardless of probe or gauge config
-        active += ObdPids.AMBIENT_TEMP
-        active += ObdPids.MAF
-        active += ObdPids.INTAKE_TEMP
-
-        // OIL_TEMP — always included; probe result is advisory for routing only, not a gate
-        active += ObdPids.OIL_TEMP
-        Log.d(TAG, "buildActivePidSet: OIL_TEMP always included — " +
-            "advisory source=${probe.oilTempSource} " +
-            "(0x0000AF=${probe.ecuStates[0x0000AF] ?: CapabilityState.UNKNOWN})")
-
-        // CVT_TEMP + AWD_DUTY — always included; TCU probe result is advisory only
-        active += ObdPids.CVT_TEMP
-        active += ObdPids.AWD_DUTY
-        val tcuUnknown    = probe.tcuStates.values.count { it == CapabilityState.UNKNOWN }
-        val tcuSupported  = probe.tcuStates.values.count { it == CapabilityState.SUPPORTED }
-        val tcuUnsupported = probe.tcuStates.values.count { it == CapabilityState.UNSUPPORTED }
-        Log.d(TAG, "buildActivePidSet: CVT_TEMP + AWD_DUTY always included — " +
-            "TCU advisory: $tcuSupported SUPPORTED, $tcuUnsupported UNSUPPORTED, $tcuUnknown UNKNOWN")
-
-        if ("TPMS_ALL" in allCmds) {
-            active += ObdPids.TIER4
-            Log.d(TAG, "buildActivePidSet: TPMS_ALL in slots — added TIER4 (${ObdPids.TIER4.size} PIDs)")
-        }
-
-        // TIER2/3/4 — filtered only by vehicle type (isTurboOnly), never by capability state
-        val candidates = (ObdPids.TIER2 + ObdPids.TIER3 + ObdPids.TIER4)
-            .filter { !it.isTurboOnly || isTurbo }
-        // Note: TCU header filter has been removed — TCU PIDs are included whenever
-        // the user places them in a gauge slot, regardless of probe state.
-
-        var addedFromSlots = 0
-        for (pid in candidates) {
-            if (pid.cmd in allCmds) {
-                active += pid
-                addedFromSlots++
-            }
-        }
-        Log.d(TAG, "buildActivePidSet: $addedFromSlots PIDs added from gauge slots " +
-            "(isTurbo=$isTurbo, candidates=${candidates.size})")
+        val registeredSensors = sensorRegistry.allSensors()
+        val active = registeredSensors
+            .filter { !it.obdPid.isTurboOnly || isTurbo }
+            .map { it.obdPid }
+            .toMutableSet()
 
         active += _carActivePids.value
 
-        Log.i(TAG, "buildActivePidSet COMPLETE: ${active.size} PIDs — " +
-            active.joinToString { it.name })
+        val excluded = registeredSensors.count { it.obdPid.isTurboOnly && !isTurbo }
+        Log.i(TAG, "buildActivePidSet from SensorRegistry: ${registeredSensors.size} registered, " +
+            "${active.size} active (isTurbo=$isTurbo, $excluded turbo-only excluded)")
+        Log.d(TAG, "Oil temp advisory source: ${probe.oilTempSource} " +
+            "(0x0000AF=${probe.ecuStates[0x0000AF] ?: CapabilityState.UNKNOWN})")
+
+        val byModule = registeredSensors.filter { !it.obdPid.isTurboOnly || isTurbo }
+            .groupBy { it.module }
+        Log.d(TAG, "Active by module: ${byModule.entries.joinToString { "${it.key}=${it.value.size}" }}")
+
+        val byPriority = registeredSensors.filter { !it.obdPid.isTurboOnly || isTurbo }
+            .groupBy { it.priority }
+        Log.d(TAG, "Active by priority: ${byPriority.entries.joinToString { "${it.key}=${it.value.size}" }}")
+
+        Log.d(TAG, "Active PIDs: ${active.joinToString { it.name }}")
         return active
     }
 
@@ -685,18 +650,24 @@ class ObdQueryEngine @Inject constructor(
         consecutiveErrors: MutableMap<String, Int>,
         skipCycles: MutableMap<String, Int>,
     ) {
+        val entry = sensorRegistry.getByPidCmd(pid.cmd)
+
         if (value != null) {
             consecutiveErrors.remove(pid.cmd)
             current[pid.cmd] = value
             _sensorValues.value = current.toMap()
+            entry?.let { sensorRegistry.updateStatus(it.sensorId, SensorStatus.ACTIVE) }
         } else {
             val errors = (consecutiveErrors[pid.cmd] ?: 0) + 1
             consecutiveErrors[pid.cmd] = errors
+            entry?.let { sensorRegistry.updateStatus(it.sensorId, SensorStatus.ERROR) }
+
             if (errors >= 3) {
                 val skipFor = when {
                     pid.ssmAddress != null -> {
                         Log.i(TAG, "Sensor ${pid.name} (SSM 0x%06X) not responding after 3 attempts — ".format(pid.ssmAddress) +
                             "suspending for session (runtime, not capability gate)")
+                        entry?.let { sensorRegistry.updateStatus(it.sensorId, SensorStatus.UNSUPPORTED) }
                         9999
                     }
                     pid.header != null && pid.header != "7E0" -> {

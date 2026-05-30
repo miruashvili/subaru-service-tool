@@ -79,6 +79,11 @@ fun BluetoothSettingsScreen(
     val showRawObd       by viewModel.showRawObd.collectAsState()
     val rawObdLog        by viewModel.rawObdLog.collectAsState()
     val detectedSensors  by viewModel.detectedSensorCount.collectAsState()
+    val adapterType      by viewModel.adapterType.collectAsState()
+    val diagnostics      by viewModel.adapterDiagnostics.collectAsState()
+    val discoveredMods   by viewModel.discoveredModules.collectAsState()
+    val dynamicPids      by viewModel.dynamicPidCount.collectAsState()
+    val loggingState     by viewModel.loggingState.collectAsState()
     val connectedMac     = viewModel.connectedMac()
     val context          = LocalContext.current
 
@@ -253,6 +258,27 @@ fun BluetoothSettingsScreen(
                 )
             }
 
+            // ── Adapter profile + module discovery + data logging ────────────
+            item {
+                Spacer(Modifier.height(12.dp))
+                AdapterDiagnosticsCard(
+                    isConnected     = connectionState is BluetoothConnectionState.Connected,
+                    adapterName     = adapterType.displayName,
+                    avgRttMs        = diagnostics.averageRttMs,
+                    errorRatePct    = diagnostics.errorRate * 100.0,
+                    fullBatch       = diagnostics.batchFullSuccesses,
+                    halfBatch       = diagnostics.batchHalfSuccesses,
+                    singleReads     = diagnostics.batchSingleFallbacks,
+                    modulesPresent  = discoveredMods.values.count { it.isPresent },
+                    modulesTotal    = discoveredMods.size,
+                    dynamicPids     = dynamicPids,
+                    totalPids       = viewModel.totalPidCount(),
+                    loggingActive   = loggingState.active,
+                    loggingRows     = loggingState.rowCount,
+                    onToggleLogging = viewModel::toggleLogging,
+                )
+            }
+
             item { Spacer(Modifier.height(16.dp)) }
         }
     }
@@ -338,6 +364,70 @@ private fun DiagnosticsCard(
             }
         }
     }
+}
+
+// ── Adapter diagnostics + module discovery + logging card ──────────────────────
+
+@Composable
+private fun AdapterDiagnosticsCard(
+    isConnected: Boolean,
+    adapterName: String,
+    avgRttMs: Double,
+    errorRatePct: Double,
+    fullBatch: Long,
+    halfBatch: Long,
+    singleReads: Long,
+    modulesPresent: Int,
+    modulesTotal: Int,
+    dynamicPids: Int,
+    totalPids: Int,
+    loggingActive: Boolean,
+    loggingRows: Long,
+    onToggleLogging: () -> Unit,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(0.5f),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            DiagRow("Adapter", if (isConnected) adapterName else "—")
+            DiagRow("Avg RTT", if (isConnected) "${avgRttMs.toInt()} ms" else "—")
+            DiagRow("Error rate", if (isConnected) "%.1f%%".format(errorRatePct) else "—")
+            DiagRow("Batch tiers", if (isConnected) "full $fullBatch · half $halfBatch · single $singleReads" else "—")
+            DiagRow("Modules", if (isConnected) "$modulesPresent / $modulesTotal present" else "—")
+            DiagRow("PID registry", if (isConnected) "$totalPids total (+$dynamicPids discovered)" else "$totalPids curated")
+
+            Spacer(Modifier.height(12.dp))
+
+            // Data logging toggle
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Record data log", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        if (loggingActive) "Recording — $loggingRows rows (CSV)"
+                        else "Save live sensor values to a CSV session file",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(0.55f),
+                    )
+                }
+                Switch(checked = loggingActive, enabled = isConnected, onCheckedChange = { onToggleLogging() })
+            }
+        }
+    }
+}
+
+@Composable
+private fun DiagRow(label: String, value: String) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Text(
+            value,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurface.copy(0.7f),
+        )
+    }
+    Spacer(Modifier.height(6.dp))
 }
 
 // ── Connection status banner ──────────────────────────────────────────────────

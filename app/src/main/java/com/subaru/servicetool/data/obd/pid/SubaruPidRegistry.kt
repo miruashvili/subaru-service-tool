@@ -56,6 +56,10 @@ private const val TAG = "SubaruPidRegistry"
 @Singleton
 class SubaruPidRegistry @Inject constructor() {
 
+    // Guards all reads/writes of the definition list and indices. Curated PIDs are registered at
+    // init; DynamicPidRegistrar adds discovered PIDs at runtime while the UI may read concurrently.
+    private val lock = Any()
+
     private val _definitions = mutableListOf<PidDefinition>()
 
     // Protocol → Transport map (one transport per protocol)
@@ -99,7 +103,7 @@ class SubaruPidRegistry @Inject constructor() {
      * Thread-safe for single-threaded initialization; external callers should synchronize
      * if registering from multiple coroutines simultaneously.
      */
-    fun register(vararg pids: PidDefinition) {
+    fun register(vararg pids: PidDefinition) = synchronized(lock) {
         for (pid in pids) {
             val existing = byKey[pid.key]
             if (existing != null) {
@@ -124,32 +128,39 @@ class SubaruPidRegistry @Inject constructor() {
     // ── Query ─────────────────────────────────────────────────────────────────
 
     /** All registered PIDs in registration order. */
-    val all: List<PidDefinition> get() = _definitions.toList()
+    val all: List<PidDefinition> get() = synchronized(lock) { _definitions.toList() }
 
     /** Total number of registered PIDs. */
-    val size: Int get() = _definitions.size
+    val size: Int get() = synchronized(lock) { _definitions.size }
 
-    fun byModule(module: SensorModule): List<PidDefinition> =
+    fun byModule(module: SensorModule): List<PidDefinition> = synchronized(lock) {
         byModule[module]?.toList() ?: emptyList()
+    }
 
-    fun byProtocol(protocol: PidProtocol): List<PidDefinition> =
+    fun byProtocol(protocol: PidProtocol): List<PidDefinition> = synchronized(lock) {
         byProtocol[protocol]?.toList() ?: emptyList()
+    }
 
-    fun byPriority(priority: SensorPriority): List<PidDefinition> =
+    fun byPriority(priority: SensorPriority): List<PidDefinition> = synchronized(lock) {
         byPriority[priority]?.toList() ?: emptyList()
+    }
 
-    fun find(key: String): PidDefinition? = byKey[key]
+    fun find(key: String): PidDefinition? = synchronized(lock) { byKey[key] }
 
-    fun findByAddress(address: PidAddress): PidDefinition? =
+    fun findByAddress(address: PidAddress): PidDefinition? = synchronized(lock) {
         _definitions.firstOrNull { it.address == address }
+    }
 
-    fun findByName(name: String): PidDefinition? =
+    fun findByName(name: String): PidDefinition? = synchronized(lock) {
         _definitions.firstOrNull { it.name.equals(name, ignoreCase = true) }
+    }
 
     /** PIDs for [modules], filtered by [isTurbo] (excludes turbo-only on NA engines). */
     fun forModules(vararg modules: SensorModule, isTurbo: Boolean = true): List<PidDefinition> =
-        _definitions.filter {
-            it.module in modules && (!it.isTurboOnly || isTurbo)
+        synchronized(lock) {
+            _definitions.filter {
+                it.module in modules && (!it.isTurboOnly || isTurbo)
+            }
         }
 
     // ── Execution pipeline ────────────────────────────────────────────────────

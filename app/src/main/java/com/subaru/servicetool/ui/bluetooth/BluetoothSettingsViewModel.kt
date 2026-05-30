@@ -46,7 +46,7 @@ class BluetoothSettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     val obdManager: OBDBluetoothManager,
     private val userPreferences: UserPreferences,
-    queryEngine: ObdQueryEngine,
+    private val queryEngine: ObdQueryEngine,
 ) : ViewModel() {
 
     val connectionState: StateFlow<BluetoothConnectionState> = obdManager.connectionState
@@ -57,6 +57,21 @@ class BluetoothSettingsViewModel @Inject constructor(
 
     /** Number of SSM sensors detected by the capability probe (ECU + TCU). */
     val detectedSensorCount: StateFlow<Int> = queryEngine.detectedSensorCount
+
+    // ── ActiveOBD diagnostics surface ──────────────────────────────────────────
+    val adapterType        = queryEngine.adapterType
+    val adapterDiagnostics = queryEngine.adapterDiagnostics
+    val discoveredModules  = queryEngine.discoveredModules
+    val dynamicPidCount    = queryEngine.dynamicPidCount
+    val loggingState       = queryEngine.loggingState
+
+    /** Curated + dynamically-discovered PID total in the extensible registry. */
+    fun totalPidCount(): Int = queryEngine.totalPidCount
+
+    fun toggleLogging() {
+        if (queryEngine.loggingState.value.active) queryEngine.stopLogging()
+        else queryEngine.startLogging()
+    }
 
     private val _rawObdLog = MutableStateFlow<List<String>>(emptyList())
     val rawObdLog: StateFlow<List<String>> = _rawObdLog.asStateFlow()

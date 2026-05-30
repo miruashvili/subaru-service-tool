@@ -4,7 +4,11 @@ import android.util.Log
 import com.subaru.servicetool.data.bluetooth.BluetoothConnectionState
 import com.subaru.servicetool.data.bluetooth.OBDBluetoothManager
 import com.subaru.servicetool.data.bluetooth.adapter.AdapterProfileManager
+import com.subaru.servicetool.data.obd.cache.SensorCache
 import com.subaru.servicetool.data.obd.discovery.ModuleDiscoveryService
+import com.subaru.servicetool.data.obd.logging.DataLogger
+import com.subaru.servicetool.data.obd.pid.DynamicPidRegistrar
+import com.subaru.servicetool.data.obd.pid.SubaruPidRegistry
 import com.subaru.servicetool.data.obd.polling.AwdPoller
 import com.subaru.servicetool.data.obd.polling.CvtPoller
 import com.subaru.servicetool.data.obd.polling.EnginePoller
@@ -57,6 +61,10 @@ class ObdQueryEngine @Inject constructor(
     private val sensorRegistry: SensorRegistry,
     private val moduleDiscovery: ModuleDiscoveryService,
     private val adapterProfileManager: AdapterProfileManager,
+    private val pidRegistry: SubaruPidRegistry,
+    private val dynamicRegistrar: DynamicPidRegistrar,
+    private val sensorCache: SensorCache,
+    private val dataLogger: DataLogger,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -80,6 +88,24 @@ class ObdQueryEngine @Inject constructor(
 
     /** Detected adapter type. */
     val adapterType get() = adapterProfileManager.adapterType
+
+    /** Per-sensor cached statistics (last / min / max / samples), survives reconnect. */
+    val sensorStats get() = sensorCache.stats
+
+    /** Live CSV data-logging state. */
+    val loggingState get() = dataLogger.state
+
+    /** Number of PIDs registered dynamically from module discovery this session. */
+    val dynamicPidCount get() = dynamicRegistrar.dynamicCount
+
+    /** Total PIDs in the extensible registry (curated + dynamically discovered). */
+    val totalPidCount: Int get() = pidRegistry.size
+
+    // ── Data logging control (ActiveOBD-style session recording) ───────────────
+    fun startLogging() = dataLogger.start()
+    fun stopLogging()  = dataLogger.stop()
+    fun listLogSessions() = dataLogger.listSessions()
+    fun resetSensorPeaks() = sensorCache.resetPeaks()
 
     // Guards all pollJob/dtcJob swaps. Lifecycle transitions can arrive concurrently from the
     // connectionState collector and the carActivePids collector (both on Dispatchers.IO), so the
@@ -128,6 +154,16 @@ class ObdQueryEngine @Inject constructor(
         }
         scope.launch {
             _carActivePids.drop(1).collect { if (pollJob?.isActive == true) startPolling() }
+        }
+        // Forward every emitted sample batch to the sensor cache (min/max/last) and the data
+        // logger (CSV recording). Both are no-ops until they have something to do.
+        scope.launch {
+            _sensorValues.collect { values ->
+                if (values.isNotEmpty()) {
+                    sensorCache.update(values)
+                    dataLogger.onSample(values)
+                }
+            }
         }
     }
 
@@ -181,8 +217,12 @@ class ObdQueryEngine @Inject constructor(
                 Log.i(TAG, "[DISCOVERY] Running module discovery")
                 val t3 = System.currentTimeMillis()
                 try {
-                    moduleDiscovery.discover()
-                    Log.i(TAG, "[DISCOVERY] Done in ${System.currentTimeMillis() - t3}ms")
+                    val modules = moduleDiscovery.discover()
+                    // Feed discovered addresses into the extensible PID registry so the framework
+                    // reflects what the ECU actually exposes (ActiveOBD discover-then-read model).
+                    val added = dynamicRegistrar.registerDiscovered(modules)
+                    Log.i(TAG, "[DISCOVERY] Done in ${System.currentTimeMillis() - t3}ms — " +
+                        "$added dynamic PIDs registered (registry total=${pidRegistry.size})")
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -277,6 +317,9 @@ class ObdQueryEngine @Inject constructor(
         sensorRegistry.reset()
         moduleDiscovery.reset()
         adapterProfileManager.reset()
+        dynamicRegistrar.reset()
+        sensorCache.clear()
+        dataLogger.onDisconnect()
         Log.i(TAG, "[DISCONNECT] Full stop — all caches cleared")
     }
 

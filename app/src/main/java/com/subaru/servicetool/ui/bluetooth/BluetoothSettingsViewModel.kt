@@ -17,6 +17,7 @@ import com.subaru.servicetool.data.bluetooth.BluetoothConnectionState
 import com.subaru.servicetool.data.bluetooth.OBDBluetoothManager
 import com.subaru.servicetool.data.bluetooth.OBDConnectionType
 import com.subaru.servicetool.data.obd.AdapterSpeedProfile
+import com.subaru.servicetool.data.obd.ObdQueryEngine
 import com.subaru.servicetool.data.preferences.UserPreferences
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -45,6 +46,7 @@ class BluetoothSettingsViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     val obdManager: OBDBluetoothManager,
     private val userPreferences: UserPreferences,
+    queryEngine: ObdQueryEngine,
 ) : ViewModel() {
 
     val connectionState: StateFlow<BluetoothConnectionState> = obdManager.connectionState
@@ -52,6 +54,9 @@ class BluetoothSettingsViewModel @Inject constructor(
 
     val showRawObd: StateFlow<Boolean> = userPreferences.showRawObd
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /** Number of SSM sensors detected by the capability probe (ECU + TCU). */
+    val detectedSensorCount: StateFlow<Int> = queryEngine.detectedSensorCount
 
     private val _rawObdLog = MutableStateFlow<List<String>>(emptyList())
     val rawObdLog: StateFlow<List<String>> = _rawObdLog.asStateFlow()
@@ -105,7 +110,7 @@ class BluetoothSettingsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             obdManager.rawObdLog.collect { line ->
-                _rawObdLog.value = (_rawObdLog.value + line).takeLast(20)
+                _rawObdLog.value = (_rawObdLog.value + line).takeLast(30)
             }
         }
     }

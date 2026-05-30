@@ -76,6 +76,9 @@ fun BluetoothSettingsScreen(
     val pairedDevices    by viewModel.pairedDevices.collectAsState()
     val scanResults      by viewModel.scanResults.collectAsState()
     val isScanning       by viewModel.isScanning.collectAsState()
+    val showRawObd       by viewModel.showRawObd.collectAsState()
+    val rawObdLog        by viewModel.rawObdLog.collectAsState()
+    val detectedSensors  by viewModel.detectedSensorCount.collectAsState()
     val connectedMac     = viewModel.connectedMac()
     val context          = LocalContext.current
 
@@ -236,7 +239,103 @@ fun BluetoothSettingsScreen(
                 item { EmptyHint("Scanning for OBD adapters…") }
             }
 
+            // ── Diagnostics ──────────────────────────────────────────────────
+            item {
+                Spacer(Modifier.height(16.dp))
+                SectionHeader("DIAGNOSTICS")
+                Spacer(Modifier.height(6.dp))
+                DiagnosticsCard(
+                    showRawObd = showRawObd,
+                    onToggleRawObd = viewModel::setShowRawObd,
+                    detectedSensors = detectedSensors,
+                    rawObdLog = rawObdLog,
+                    isConnected = connectionState is BluetoothConnectionState.Connected,
+                )
+            }
+
             item { Spacer(Modifier.height(16.dp)) }
+        }
+    }
+}
+
+// ── Diagnostics card ──────────────────────────────────────────────────────────
+
+@Composable
+private fun DiagnosticsCard(
+    showRawObd: Boolean,
+    onToggleRawObd: (Boolean) -> Unit,
+    detectedSensors: Int,
+    rawObdLog: List<String>,
+    isConnected: Boolean,
+) {
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(0.5f),
+        shape = RoundedCornerShape(12.dp),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Detected sensors
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Detected sensors", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        if (isConnected) "$detectedSensors supported SSM sensors"
+                        else "Connect to probe ECU capabilities",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(0.55f),
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            // Show raw OBD log toggle
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Show raw OBD log", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "Last 30 adapter responses — for debugging supported addresses",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(0.55f),
+                    )
+                }
+                Switch(checked = showRawObd, onCheckedChange = onToggleRawObd)
+            }
+
+            if (showRawObd) {
+                Spacer(Modifier.height(12.dp))
+                Surface(
+                    color = MaterialTheme.colorScheme.surface,
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 220.dp)
+                            .verticalScroll(rememberScrollState())
+                            .padding(10.dp),
+                    ) {
+                        if (rawObdLog.isEmpty()) {
+                            Text(
+                                "Waiting for adapter traffic…",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.onSurface.copy(0.4f),
+                            )
+                        } else {
+                            rawObdLog.forEach { line ->
+                                Text(
+                                    text = line.replace("\r", " ").replace("\n", " ").trim(),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(0.8f),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

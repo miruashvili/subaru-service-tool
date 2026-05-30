@@ -165,6 +165,20 @@ object ObdPids {
         header = "7E0", ssmAddress = 0x0010B2,
     ) { b -> if (b.isNotEmpty()) b[0].toFloat() * 100f / 255f else null }
 
+    // SSM A8 address 0x0010A1 — MAF sensor output voltage; classic SSM scaling A × 0.02 (0–5.1 V)
+    val MAF_VOLTAGE = ObdPid(
+        cmd = "2210A1", name = "MAF Sensor Voltage", unit = "V",
+        minVal = 0f, maxVal = 5f, group = PidGroup.ENGINE,
+        header = "7E0", ssmAddress = 0x0010A1,
+    ) { b -> if (b.isNotEmpty()) b[0].toFloat() * 0.02f else null }
+
+    // SSM A8 address 0x0010A6 — accelerator pedal angle; equation A × 100 / 255 (%)
+    val ACCEL_PEDAL = ObdPid(
+        cmd = "2210A6", name = "Accelerator Pedal", unit = "%",
+        minVal = 0f, maxVal = 100f, group = PidGroup.ENGINE,
+        header = "7E0", ssmAddress = 0x0010A6,
+    ) { b -> if (b.isNotEmpty()) b[0].toFloat() * 100f / 255f else null }
+
     val FUEL_PUMP = ObdPid(
         cmd = "2210B3", name = "Fuel Pump Duty", unit = "%",
         minVal = 0f, maxVal = 100f, group = PidGroup.FUEL,
@@ -282,6 +296,7 @@ object ObdPids {
         PRIMARY_PULLEY_SPEED, SECONDARY_PULLEY_SPEED, TURBINE_RPM,
         BATTERY_TEMP, RADIATOR_FAN, KNOCK_CORRECTION, EGT, WASTEGATE,
         THROTTLE_MOTOR, ALTERNATOR_DUTY, FUEL_PUMP, VVT_LEFT, VVT_RIGHT,
+        MAF_VOLTAGE, ACCEL_PEDAL,
         O2_VOLTAGE,
     )
 
@@ -308,7 +323,7 @@ object ObdPids {
         KNOCK_CORRECTION, WASTEGATE, VVT_LEFT, VVT_RIGHT,
         LOCKUP_DUTY, CVT_RATIO_ACTUAL, CVT_RATIO_TARGET,
         PRIMARY_PULLEY_SPEED, SECONDARY_PULLEY_SPEED, TURBINE_RPM,
-        ALTERNATOR_DUTY, O2_VOLTAGE,
+        ALTERNATOR_DUTY, MAF_VOLTAGE, ACCEL_PEDAL, O2_VOLTAGE,
     )
 
     /** Polled every K cycles (K = profile.tier4Every) — slow-changing values. */

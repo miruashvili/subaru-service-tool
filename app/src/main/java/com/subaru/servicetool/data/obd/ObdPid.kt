@@ -5,12 +5,6 @@ enum class PidGroup { ENGINE, TEMPERATURE, FUEL, MISC, TRANSMISSION }
 /** Which physical source the polling engine actually queries for engine oil temperature. */
 enum class OilTempSource { OBD_STANDARD, SSM_ECU, SSM_ECU_ALT, NONE }
 
-/** Cached result of the first-connect sensor probe. */
-data class SensorProbeResult(
-    val oilTempSource: OilTempSource = OilTempSource.NONE,
-    val tcuAvailable: Boolean = false,
-)
-
 /**
  * Describes one OBD-II or Subaru SSM (Mode 22) command.
  * [parse] receives the raw data bytes following the mode+PID echo in the adapter response.

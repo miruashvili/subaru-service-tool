@@ -24,7 +24,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Mutex
-import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -33,21 +32,22 @@ private const val TAG = "ObdQueryEngine"
 /**
  * Orchestrates the independent polling engine.
  *
- * On each BT connection four specialised pollers are launched as sibling coroutines
- * inside a [supervisorScope]:
+ * Connection lifecycle:
+ *   Connected     → startPolling()   (full setup on first connect; fast restart on reconnect)
+ *   Reconnecting  → pausePolling()   (stops pollers, PRESERVES all caches)
+ *   Disconnected  → stopPolling()    (stops pollers, clears all caches)
+ *   Error         → stopPolling()    (stops pollers, clears all caches)
  *
+ * This means a reconnect never re-runs adapter detection, capability probe, or module
+ * discovery — pollers restart within ~0.5 s of the link coming back.
+ *
+ * Pollers run as sibling coroutines inside a [supervisorScope]:
  *   EnginePoller — OBD + ECU sensors (HIGH/MEDIUM/LOW priority queues)
  *   CvtPoller    — TCU CVT sensors (HIGH/MEDIUM queues, header 7E1)
  *   AwdPoller    — AWD Transfer Duty (dedicated HIGH poller, header 7E1)
  *   TpmsPoller   — BCM TPMS sensors (LOW queue, header 7D4)
  *
  * Failure of any poller is logged but does not cancel the others.
- *
- * [moduleHeaderMutex] is shared by CvtPoller, AwdPoller, and TpmsPoller to ensure
- * ATSH→read→ATSH7E0 sequences are never interleaved across pollers.
- *
- * [singleReadMode] is an [AtomicBoolean] shared across all pollers; set to true the
- * first time a multi-address A8 batch returns a malformed response.
  */
 @Singleton
 class ObdQueryEngine @Inject constructor(
@@ -66,46 +66,43 @@ class ObdQueryEngine @Inject constructor(
     private val _dtcCount = MutableStateFlow(0)
     val dtcCount: StateFlow<Int> = _dtcCount.asStateFlow()
 
-    // Advisory count of SSM addresses that responded during the capability probe.
     private val _detectedSensorCount = MutableStateFlow(0)
     val detectedSensorCount: StateFlow<Int> = _detectedSensorCount.asStateFlow()
 
     private val _carActivePids = MutableStateFlow<Set<ObdPid>>(emptySet())
     fun setCarActivePids(pids: Set<ObdPid>) { _carActivePids.value = pids }
 
-    /** Live runtime module map from [ModuleDiscoveryService]. Populated after first connect. */
+    /** Live runtime module map — populated after first connect. */
     val discoveredModules get() = moduleDiscovery.modules
 
-    /** Live adapter diagnostics (RTT, batch tiers, timeouts, retries). */
+    /** Live adapter diagnostics snapshot (RTT, batch tiers, timeouts, retries). */
     val adapterDiagnostics get() = adapterProfileManager.diagnostics.snapshot
 
     /** Detected adapter type. */
     val adapterType get() = adapterProfileManager.adapterType
 
+    // Guards all pollJob/dtcJob swaps. Lifecycle transitions can arrive concurrently from the
+    // connectionState collector and the carActivePids collector (both on Dispatchers.IO), so the
+    // cancel-then-reassign must be atomic to avoid leaking or double-running poller coroutines.
+    private val lifecycleLock = Any()
+
     private var pollJob: Job? = null
-    private var cachedSnapshot: CapabilitySnapshot? = null
+    private var dtcJob:  Job? = null
 
-    // Shared across all pollers — set true on first A8 batch parse failure.
-    private val singleReadMode = AtomicBoolean(false)
+    // Capability snapshot — preserved across Reconnecting cycles; cleared only on full disconnect.
+    @Volatile private var cachedSnapshot: CapabilitySnapshot? = null
 
-    // Shared mutex for any poller that needs to switch the CAN header away from 7E0.
+    // Shared mutex for CvtPoller, AwdPoller, TpmsPoller header transactions.
     private val moduleHeaderMutex = Mutex()
 
-    // Called by pollers when batch-read mode fails; persists the flag to DataStore.
-    private val onBatchFailed: () -> Unit = {
-        singleReadMode.set(true)
-        scope.launch { userPreferences.setAdapterSingleRead(true) }
-        Log.i(TAG, "A8 batch failed — all pollers switched to single-read mode")
-    }
-
-    // Poller instances — created once, reused across connections.
+    // Poller instances — created once, reused across all sessions.
     private val enginePoller = EnginePoller(
-        btManager, capabilityProber, sensorRegistry, _sensorValues, singleReadMode, onBatchFailed,
+        btManager, capabilityProber, sensorRegistry, _sensorValues,
         profileManager = adapterProfileManager,
     )
     private val cvtPoller = CvtPoller(
-        btManager, capabilityProber, sensorRegistry, _sensorValues, moduleHeaderMutex, singleReadMode, onBatchFailed,
-        profileManager = adapterProfileManager,
+        btManager, capabilityProber, sensorRegistry, _sensorValues,
+        moduleHeaderMutex, profileManager = adapterProfileManager,
     )
     private val awdPoller = AwdPoller(
         btManager, capabilityProber, sensorRegistry, _sensorValues, moduleHeaderMutex,
@@ -118,8 +115,14 @@ class ObdQueryEngine @Inject constructor(
         scope.launch {
             btManager.connectionState.collect { state ->
                 when (state) {
-                    is BluetoothConnectionState.Connected -> startPolling()
-                    else                                  -> stopPolling()
+                    is BluetoothConnectionState.Connected     -> startPolling()
+                    // Connecting + Reconnecting are transient — pause pollers but PRESERVE the
+                    // capability/module/adapter caches so a reconnect skips the expensive setup.
+                    is BluetoothConnectionState.Connecting    -> pausePolling()
+                    is BluetoothConnectionState.Reconnecting  -> pausePolling()
+                    // Disconnected + Error are terminal — full teardown clears all caches.
+                    is BluetoothConnectionState.Disconnected  -> stopPolling()
+                    is BluetoothConnectionState.Error         -> stopPolling()
                 }
             }
         }
@@ -130,55 +133,83 @@ class ObdQueryEngine @Inject constructor(
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-    private fun startPolling() {
+    private fun startPolling() = synchronized(lifecycleLock) {
         pollJob?.cancel()
         pollJob = scope.launch {
+            val t0 = System.currentTimeMillis()
+            val isReconnect = cachedSnapshot != null
+
             _sensorValues.value = emptyMap()
-            sensorRegistry.reset()
+            Log.i(TAG, "[CONNECT] ${if (isReconnect) "Reconnect" else "First connect"} — starting setup")
 
             delay(500)
             queryDtcs()
 
-            singleReadMode.set(userPreferences.adapterSingleRead.first())
-            Log.i(TAG, "Polling started — singleReadMode=${singleReadMode.get()}")
+            if (!isReconnect) {
+                // ── Full first-connect setup ────────────────────────────────
+                sensorRegistry.reset()
 
-            // ── Adapter detection ── identify hardware before probing or polling ──
-            Log.i(TAG, "Running adapter detection")
-            try {
-                adapterProfileManager.detect(btManager.lastDeviceName)
-                Log.i(TAG, "Adapter: ${adapterProfileManager.adapterType.value.displayName} " +
-                    "maxBatch=${adapterProfileManager.activeCapabilities.maxBatchAddresses} " +
-                    "timeout=${adapterProfileManager.activeCapabilities.defaultTimeoutMs}ms")
-            } catch (e: Exception) {
-                Log.e(TAG, "Adapter detection failed — using UNKNOWN profile: ${e.message}", e)
+                // 1. Adapter detection
+                Log.i(TAG, "[DETECT] Identifying adapter hardware")
+                val t1 = System.currentTimeMillis()
+                try {
+                    adapterProfileManager.detect(btManager.lastDeviceName)
+                    Log.i(TAG, "[DETECT] ${adapterProfileManager.adapterType.value.displayName} " +
+                        "in ${System.currentTimeMillis() - t1}ms — " +
+                        "maxBatch=${adapterProfileManager.activeCapabilities.maxBatchAddresses} " +
+                        "timeout=${adapterProfileManager.activeCapabilities.defaultTimeoutMs}ms")
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "[DETECT] Failed (${e.message}) — using UNKNOWN profile")
+                }
+
+                // 2. Capability probe
+                Log.i(TAG, "[PROBE] Running capability probe")
+                val t2 = System.currentTimeMillis()
+                val snapshot = loadOrRunSnapshot()
+                cachedSnapshot = snapshot
+                _detectedSensorCount.value =
+                    snapshot.ecuStates.values.count { it == CapabilityState.SUPPORTED } +
+                    snapshot.tcuStates.values.count { it == CapabilityState.SUPPORTED }
+                Log.i(TAG, "[PROBE] Done in ${System.currentTimeMillis() - t2}ms — " +
+                    "oil=${snapshot.oilTempSource} " +
+                    "ecuSupported=${snapshot.ecuStates.values.count { it == CapabilityState.SUPPORTED }} " +
+                    "tcuSupported=${snapshot.tcuStates.values.count { it == CapabilityState.SUPPORTED }}")
+
+                // 3. Module discovery — sequential before pollers (header isolation)
+                Log.i(TAG, "[DISCOVERY] Running module discovery")
+                val t3 = System.currentTimeMillis()
+                try {
+                    moduleDiscovery.discover()
+                    Log.i(TAG, "[DISCOVERY] Done in ${System.currentTimeMillis() - t3}ms")
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.e(TAG, "[DISCOVERY] Failed (${e.message}) — pollers start anyway")
+                }
+            } else {
+                // ── Reconnect: skip expensive setup, reuse caches ────────────
+                val snapshot = cachedSnapshot!!
+                Log.i(TAG, "[RECONNECT] Reusing cached snapshot — " +
+                    "oil=${snapshot.oilTempSource} " +
+                    "ecuSupported=${snapshot.ecuStates.values.count { it == CapabilityState.SUPPORTED }} " +
+                    "adapter=${adapterProfileManager.adapterType.value.displayName}")
             }
 
-            val snapshot = loadOrRunSnapshot()
-            _detectedSensorCount.value =
-                snapshot.ecuStates.values.count { it == CapabilityState.SUPPORTED } +
-                snapshot.tcuStates.values.count { it == CapabilityState.SUPPORTED }
-            Log.i(TAG, "Advisory detected sensors: ${_detectedSensorCount.value}")
-
-            // ── Module discovery ── runs before pollers so headers are uncontested ──
-            Log.i(TAG, "Running module discovery (sequential, before pollers start)")
-            try {
-                moduleDiscovery.discover()
-            } catch (e: Exception) {
-                Log.e(TAG, "Module discovery failed — pollers will start regardless: ${e.message}", e)
+            val snapshot = cachedSnapshot ?: run {
+                Log.e(TAG, "[CONNECT] BUG: cachedSnapshot null after setup — running emergency probe")
+                loadOrRunSnapshot().also { cachedSnapshot = it }
             }
 
             val vehicle = userPreferences.selectedVehicle.first()
             val isTurbo = vehicle?.isTurbo ?: true
             val carPids = _carActivePids.value
 
-            Log.i(TAG, "Launching pollers — isTurbo=$isTurbo carActivePids=${carPids.size}")
-            Log.i(TAG, "EnginePoller — OBD + ECU module sensors (HIGH/MEDIUM/LOW queues)")
-            Log.i(TAG, "CvtPoller    — TCU CVT sensors (HIGH/MEDIUM queues, ATSH7E1)")
-            Log.i(TAG, "AwdPoller    — AWD Transfer Duty (dedicated HIGH poller, ATSH7E1)")
-            Log.i(TAG, "TpmsPoller   — BCM TPMS sensors (LOW queue, ATSH7D4)")
+            Log.i(TAG, "[POLLERS] Launching — isTurbo=$isTurbo carPids=${carPids.size} " +
+                "setupMs=${System.currentTimeMillis() - t0}")
 
-            // supervisorScope: child failures are isolated — one crash doesn't cancel others.
-            // When pollJob is cancelled (on disconnect), all children are cancelled.
+            // supervisorScope: child failures are isolated; cancelled when pollJob is cancelled.
             supervisorScope {
                 launch {
                     try {
@@ -186,7 +217,7 @@ class ObdQueryEngine @Inject constructor(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        Log.e(TAG, "EnginePoller terminated unexpectedly: ${e.message}", e)
+                        Log.e(TAG, "[POLLERS] EnginePoller crashed: ${e.message}", e)
                     }
                 }
                 launch {
@@ -195,7 +226,7 @@ class ObdQueryEngine @Inject constructor(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        Log.e(TAG, "CvtPoller terminated unexpectedly: ${e.message}", e)
+                        Log.e(TAG, "[POLLERS] CvtPoller crashed: ${e.message}", e)
                     }
                 }
                 launch {
@@ -204,7 +235,7 @@ class ObdQueryEngine @Inject constructor(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        Log.e(TAG, "AwdPoller terminated unexpectedly: ${e.message}", e)
+                        Log.e(TAG, "[POLLERS] AwdPoller crashed: ${e.message}", e)
                     }
                 }
                 launch {
@@ -213,30 +244,47 @@ class ObdQueryEngine @Inject constructor(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
-                        Log.e(TAG, "TpmsPoller terminated unexpectedly: ${e.message}", e)
+                        Log.e(TAG, "[POLLERS] TpmsPoller crashed: ${e.message}", e)
                     }
                 }
             }
         }
     }
 
-    private fun stopPolling() {
-        pollJob?.cancel()
-        pollJob = null
+    /**
+     * Called on [BluetoothConnectionState.Reconnecting].
+     * Stops all pollers and clears live data but PRESERVES the capability snapshot,
+     * module discovery results, and adapter profile so they are not re-run on reconnect.
+     */
+    private fun pausePolling() = synchronized(lifecycleLock) {
+        pollJob?.cancel(); pollJob = null
+        _sensorValues.value = emptyMap()
+        _dtcCount.value = 0
+        Log.i(TAG, "[RECONNECT] Pollers paused — snapshot/profile/modules preserved")
+    }
+
+    /**
+     * Called on [BluetoothConnectionState.Disconnected] or [BluetoothConnectionState.Error].
+     * Full teardown: cancels pollers and clears ALL caches so the next connection
+     * re-runs adapter detection, capability probe, and module discovery.
+     */
+    private fun stopPolling() = synchronized(lifecycleLock) {
+        pollJob?.cancel(); pollJob = null
+        dtcJob?.cancel(); dtcJob = null
         _sensorValues.value = emptyMap()
         _dtcCount.value = 0
         cachedSnapshot = null
         sensorRegistry.reset()
         moduleDiscovery.reset()
         adapterProfileManager.reset()
-        Log.i(TAG, "Polling stopped — all pollers cancelled, registries reset")
+        Log.i(TAG, "[DISCONNECT] Full stop — all caches cleared")
     }
 
     // ── Capability snapshot ───────────────────────────────────────────────────
 
     private suspend fun loadOrRunSnapshot(): CapabilitySnapshot {
         cachedSnapshot?.let {
-            Log.d(TAG, "In-memory snapshot cache hit")
+            Log.d(TAG, "[PROBE] In-memory cache hit")
             return it
         }
 
@@ -251,16 +299,16 @@ class ObdQueryEngine @Inject constructor(
                 OilTempSource.valueOf(userPreferences.probeOilTempSource.first())
             }.getOrDefault(OilTempSource.NONE)
 
-            val ecuSupported = ecuStates.values.count { it == CapabilityState.SUPPORTED }
-            val tcuSupported = tcuStates.values.count { it == CapabilityState.SUPPORTED }
-            Log.i(TAG, "DataStore snapshot cache hit: oil=$src ecuSupported=$ecuSupported tcuSupported=$tcuSupported")
-            Log.d(TAG, "ECU advisory: ${ecuStates.entries.joinToString { "0x%06X→%s".format(it.key, it.value) }}")
-            Log.d(TAG, "TCU advisory: ${tcuStates.entries.joinToString { "0x%06X→%s".format(it.key, it.value) }}")
+            Log.i(TAG, "[PROBE] DataStore cache hit — oil=$src " +
+                "ecuSupported=${ecuStates.values.count { it == CapabilityState.SUPPORTED }} " +
+                "tcuSupported=${tcuStates.values.count { it == CapabilityState.SUPPORTED }}")
+            Log.d(TAG, "[PROBE] ECU: ${ecuStates.entries.joinToString { "0x%06X→%s".format(it.key, it.value) }}")
+            Log.d(TAG, "[PROBE] TCU: ${tcuStates.entries.joinToString { "0x%06X→%s".format(it.key, it.value) }}")
 
             return CapabilitySnapshot(src, ecuStates, tcuStates).also { cachedSnapshot = it }
         }
 
-        Log.i(TAG, "No snapshot cache — running probe (advisory mode)")
+        Log.i(TAG, "[PROBE] No cache — running live probe (advisory mode, no sensors blocked)")
         return runSnapshot().also {
             cachedSnapshot = it
             userPreferences.saveCapabilities(serializeCaps(it.ecuStates), serializeCaps(it.tcuStates))
@@ -268,44 +316,36 @@ class ObdQueryEngine @Inject constructor(
                 it.oilTempSource.name,
                 it.tcuStates.values.any { s -> s == CapabilityState.SUPPORTED },
             )
-            Log.i(TAG, "Snapshot saved: oil=${it.oilTempSource} " +
-                "ecuSupported=${it.ecuStates.values.count { s -> s == CapabilityState.SUPPORTED }} " +
-                "tcuSupported=${it.tcuStates.values.count { s -> s == CapabilityState.SUPPORTED }}")
         }
     }
 
     private suspend fun runSnapshot(): CapabilitySnapshot {
-        Log.i(TAG, "=== Capability probe START ===")
         val ecuStates     = capabilityProber.probeEcuCapabilities()
         val oilTempSource = probeOilTempSource(ecuStates)
         val tcuStates     = capabilityProber.probeTcuCapabilities()
-        Log.i(TAG, "=== Capability probe END: oil=$oilTempSource ===")
         return CapabilitySnapshot(oilTempSource, ecuStates, tcuStates)
     }
 
     private suspend fun probeOilTempSource(ecuStates: Map<Int, CapabilityState>): OilTempSource {
-        Log.d(TAG, "Probing oil temp source...")
-
         val stdResp = btManager.sendCommand("015C", 2_000L)
         if (stdResp != null && ObdParser.parseStandard(stdResp, "015C")?.isNotEmpty() == true) {
-            Log.i(TAG, "Oil temp → OBD_STANDARD (015C)")
+            Log.i(TAG, "[PROBE] Oil temp → OBD_STANDARD (015C)")
             return OilTempSource.OBD_STANDARD
         }
 
         val afState = ecuStates[0x0000AF] ?: CapabilityState.UNKNOWN
-        Log.d(TAG, "0x0000AF advisory=$afState")
         if (afState == CapabilityState.SUPPORTED || afState == CapabilityState.UNKNOWN) {
-            Log.i(TAG, "Oil temp → SSM_ECU (0x0000AF) [advisory=$afState]")
+            Log.i(TAG, "[PROBE] Oil temp → SSM_ECU (0x0000AF) [advisory=$afState]")
             return OilTempSource.SSM_ECU
         }
 
         val altResp = btManager.sendCommand(capabilityProber.buildSsmA8Single(0x009D5C), 2_000L)
         if (altResp != null && ObdParser.parseSsmResponse(altResp) != null) {
-            Log.i(TAG, "Oil temp → SSM_ECU_ALT (0x009D5C)")
+            Log.i(TAG, "[PROBE] Oil temp → SSM_ECU_ALT (0x009D5C)")
             return OilTempSource.SSM_ECU_ALT
         }
 
-        Log.i(TAG, "Oil temp → NONE (inconclusive) — EnginePoller will default to SSM_ECU")
+        Log.i(TAG, "[PROBE] Oil temp → NONE — EnginePoller will default to SSM_ECU (advisory)")
         return OilTempSource.NONE
     }
 
@@ -328,17 +368,15 @@ class ObdQueryEngine @Inject constructor(
 
     // ── DTC ───────────────────────────────────────────────────────────────────
 
-    fun requestDtcRefresh() {
-        scope.launch { queryDtcs() }
+    fun requestDtcRefresh() = synchronized(lifecycleLock) {
+        dtcJob?.cancel()
+        dtcJob = scope.launch { queryDtcs() }
     }
 
     private suspend fun queryDtcs() {
         val response = btManager.sendCommand("03") ?: return
         val count = ObdParser.parseDtcCount(response)
         _dtcCount.value = count
-        Log.d(TAG, "DTC count: $count")
+        Log.d(TAG, "[DTC] count=$count")
     }
-
-    private fun isConnected() =
-        btManager.connectionState.value is BluetoothConnectionState.Connected
 }

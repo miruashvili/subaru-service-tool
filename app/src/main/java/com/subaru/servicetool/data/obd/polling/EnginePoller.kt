@@ -11,11 +11,9 @@ import com.subaru.servicetool.data.obd.ObdParser
 import com.subaru.servicetool.data.obd.ObdPid
 import com.subaru.servicetool.data.obd.ObdPids
 import com.subaru.servicetool.data.obd.OilTempSource
-import com.subaru.servicetool.data.obd.SensorProtocol
 import com.subaru.servicetool.data.obd.SensorRegistry
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Polls all OBD-module and ECU-module sensors independently.
@@ -36,8 +34,6 @@ class EnginePoller(
     capabilityProber: ObdCapabilityProber,
     sensorRegistry: SensorRegistry,
     sensorValues: MutableStateFlow<Map<String, Float>>,
-    private val singleReadMode: AtomicBoolean,
-    private val onBatchFailed: () -> Unit,
     profileManager: AdapterProfileManager? = null,
 ) : BasePoller(btManager, capabilityProber, sensorRegistry, sensorValues, profileManager) {
 
@@ -95,12 +91,6 @@ class EnginePoller(
                 val value = queryObd(pid, profile)
                 if (value == null) timeoutsThisCycle++
                 emitValue(pid, value)
-            }
-
-            // IAT fallback: 010F → 0168 if no data
-            val iatPid = ObdPids.INTAKE_TEMP
-            if (iatPid in mediumPids && !isSkipped(iatPid)) {
-                // Handled in medium; no fallback needed in high
             }
 
             consecutiveTimeouts = if (timeoutsThisCycle > 0)
@@ -200,12 +190,9 @@ class EnginePoller(
             emitValue(ObdPids.OIL_TEMP, processOilTemp(snapshot))
         }
 
-        // ECU SSM A8 — batch read
+        // ECU SSM A8 — batch read (AdapterProfileManager owns the batch→single fallback)
         if (ssmPids.isNotEmpty() && isConnected()) {
-            val results = querySsmBatch(ssmPids, !singleReadMode.get()) {
-                singleReadMode.set(true)
-                onBatchFailed()
-            }
+            val results = querySsmBatch(ssmPids)
             for ((pid, value) in results) emitValue(pid, value)
         }
 

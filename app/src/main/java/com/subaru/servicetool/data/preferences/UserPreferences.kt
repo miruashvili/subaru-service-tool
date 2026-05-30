@@ -81,8 +81,6 @@ class UserPreferences @Inject constructor(
         // Comma-separated supported SSM addresses in hex (e.g. "AF,10B2,1136").
         private val KEY_ECU_CAPS            = stringPreferencesKey("ecu_caps")
         private val KEY_TCU_CAPS            = stringPreferencesKey("tcu_caps")
-        // Adapter cannot handle multi-address A8 batch reads → fall back to single reads.
-        private val KEY_ADAPTER_SINGLE_READ = booleanPreferencesKey("adapter_single_read")
 
         // ── Debug ──────────────────────────────────────────────────────────────
         private val KEY_SHOW_RAW_OBD = booleanPreferencesKey("show_raw_obd")
@@ -371,17 +369,12 @@ class UserPreferences @Inject constructor(
 
     val ecuCaps: Flow<String?>            = dataStore.data.map { it[KEY_ECU_CAPS] }
     val tcuCaps: Flow<String?>            = dataStore.data.map { it[KEY_TCU_CAPS] }
-    val adapterSingleRead: Flow<Boolean>  = dataStore.data.map { it[KEY_ADAPTER_SINGLE_READ] ?: false }
 
     suspend fun saveCapabilities(ecuCaps: String, tcuCaps: String) {
         dataStore.edit { prefs ->
             prefs[KEY_ECU_CAPS] = ecuCaps
             prefs[KEY_TCU_CAPS] = tcuCaps
         }
-    }
-
-    suspend fun setAdapterSingleRead(enabled: Boolean) {
-        dataStore.edit { it[KEY_ADAPTER_SINGLE_READ] = enabled }
     }
 
     // ── Debug ─────────────────────────────────────────────────────────────────

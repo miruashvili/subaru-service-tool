@@ -42,8 +42,9 @@ import javax.inject.Singleton
 
 private const val TAG = "OBDBluetoothManager"
 private const val MAX_RECONNECT = 5
-private const val RECONNECT_DELAY_MS = 3_000L
-private const val KEEP_ALIVE_INTERVAL_MS = 1_500L
+// Exponential backoff: base × 2^(attempt-1), capped. 2s → 4s → 8s → 16s → 20s(cap).
+private const val RECONNECT_DELAY_BASE_MS = 2_000L
+private const val RECONNECT_DELAY_MAX_MS  = 20_000L
 private const val GATT_TIMEOUT_MS = 10_000L
 private const val MTU_SIZE = 512
 
@@ -512,10 +513,12 @@ class OBDBluetoothManager @Inject constructor(
 
         _state.value = BluetoothConnectionState.Reconnecting
         reconnectAttempts++
-        Log.i(TAG, "Reconnect $reconnectAttempts/$MAX_RECONNECT in ${RECONNECT_DELAY_MS}ms")
+        val backoffMs = (RECONNECT_DELAY_BASE_MS shl (reconnectAttempts - 1).coerceIn(0, 4))
+            .coerceAtMost(RECONNECT_DELAY_MAX_MS)
+        Log.i(TAG, "Reconnect $reconnectAttempts/$MAX_RECONNECT in ${backoffMs}ms (backoff)")
 
         activeConnectionJob = scope.launch {
-            delay(RECONNECT_DELAY_MS)
+            delay(backoffMs)
             val mac = lastDeviceMac ?: return@launch
             @SuppressLint("MissingPermission")
             val device = btAdapter?.getRemoteDevice(mac) ?: return@launch

@@ -4,6 +4,7 @@ import android.util.Log
 import com.subaru.servicetool.data.bluetooth.OBDBluetoothManager
 import com.subaru.servicetool.data.bluetooth.adapter.AdapterProfileManager
 import com.subaru.servicetool.data.obd.CapabilitySnapshot
+import com.subaru.servicetool.data.obd.CapabilityState
 import com.subaru.servicetool.data.obd.ObdCapabilityProber
 import com.subaru.servicetool.data.obd.ObdPids
 import com.subaru.servicetool.data.obd.SensorRegistry
@@ -11,7 +12,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Polls Subaru TCU sensors related to CVT operation.
@@ -36,8 +36,6 @@ class CvtPoller(
     sensorRegistry: SensorRegistry,
     sensorValues: MutableStateFlow<Map<String, Float>>,
     private val moduleHeaderMutex: Mutex,
-    private val singleReadMode: AtomicBoolean,
-    private val onBatchFailed: () -> Unit,
     profileManager: AdapterProfileManager? = null,
 ) : BasePoller(btManager, capabilityProber, sensorRegistry, sensorValues, profileManager) {
 
@@ -69,8 +67,8 @@ class CvtPoller(
 
         Log.i(tag, "Queues: HIGH-SSM=${highSsm.size} MEDIUM-SSM=${mediumSsm.size} MEDIUM-UDS=${mediumUds.size}")
 
-        val tcuSupported = snapshot.tcuStates.values.count { it == com.subaru.servicetool.data.obd.CapabilityState.SUPPORTED }
-        val tcuUnknown   = snapshot.tcuStates.values.count { it == com.subaru.servicetool.data.obd.CapabilityState.UNKNOWN }
+        val tcuSupported = snapshot.tcuStates.values.count { it == CapabilityState.SUPPORTED }
+        val tcuUnknown   = snapshot.tcuStates.values.count { it == CapabilityState.UNKNOWN }
         Log.i(tag, "TCU advisory: $tcuSupported SUPPORTED / $tcuUnknown UNKNOWN — polling all regardless")
 
         var iteration = 0
@@ -84,10 +82,7 @@ class CvtPoller(
                 if (dueSsm.isNotEmpty()) {
                     Log.d(tag, "--- iteration=$iteration HIGH (CVT temp) ---")
                     tcuTransaction {
-                        val results = querySsmBatch(dueSsm, !singleReadMode.get()) {
-                            singleReadMode.set(true)
-                            onBatchFailed()
-                        }
+                        val results = querySsmBatch(dueSsm)
                         for ((pid, value) in results) emitValue(pid, value)
                     }
                 }
@@ -101,10 +96,7 @@ class CvtPoller(
                     tcuTransaction {
                         val ssmDue = mediumSsm.filter { !isSkipped(it) }
                         if (ssmDue.isNotEmpty()) {
-                            val results = querySsmBatch(ssmDue, !singleReadMode.get()) {
-                                singleReadMode.set(true)
-                                onBatchFailed()
-                            }
+                            val results = querySsmBatch(ssmDue)
                             for ((pid, value) in results) emitValue(pid, value)
                         }
                         for (pid in mediumUds) {

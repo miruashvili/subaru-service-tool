@@ -11,14 +11,20 @@ private const val TAG = "ObdCapabilityProber"
 /**
  * Implements the ActiveOBD-style capability probe + SSM A8 multi-address batch read.
  *
- * Subaru ECUs do not advertise a fixed PID list — instead the tool probes each candidate
- * SSM memory address once, marks the ones that respond, and afterwards reads only those
- * addresses. Multiple addresses are read in a single A8 "read-block" command (E8 response),
- * with a safe fall-back to one-address-per-command for adapters that can't segment the
- * multi-frame request.
+ * The probe result is **advisory only**. Every address is assigned one of three states:
+ *   UNKNOWN    — the probe was skipped or never ran for this address
+ *   SUPPORTED  — the address responded to the A8 single-read during the probe
+ *   UNSUPPORTED — the address was probed and returned NO DATA / timed out
  *
- * Header switching (ATSH) is performed by the probe entry points but NOT by [readSsmBatch] —
- * the polling engine owns the header for the rest of the poll cycle.
+ * The polling engine ([ObdQueryEngine]) uses these states for logging and metrics only.
+ * It never blocks a sensor from being polled based on capability state.
+ *
+ * Multiple addresses are read in a single A8 "read-block" command (E8 response),
+ * with a safe fall-back to one-address-per-command for adapters that can't segment
+ * the multi-frame request.
+ *
+ * Header switching (ATSH) is performed by the probe entry points but NOT by
+ * [readSsmBatch] — the polling engine owns the header for the rest of the poll cycle.
  */
 @Singleton
 class ObdCapabilityProber @Inject constructor(
@@ -27,8 +33,11 @@ class ObdCapabilityProber @Inject constructor(
     companion object {
         /**
          * FB25 NA (non-turbo) verified ECU memory addresses (header 7E0).
-         * Turbo-only addresses (0x003018 knock, 0x0010C9 wastegate, 0x00105F throttle motor)
-         * are intentionally excluded — they don't exist on the NA boxer.
+         * Turbo-only addresses (0x003018 knock, 0x0010C9 wastegate) are intentionally
+         * excluded — they don't exist on the NA boxer.
+         *
+         * 0x00105F (throttle motor duty) is included so it can be probed and assigned a
+         * capability state; it was previously missing from this list.
          */
         val CANDIDATE_ECU_ADDRESSES = listOf(
             0x000008,  // Coolant Temp (SSM backup)        A − 40
@@ -41,6 +50,7 @@ class ObdCapabilityProber @Inject constructor(
             0x0010B4,  // VVT Advance Right                (A − 128) × 0.5
             0x0010B5,  // VVT Advance Left                 (A − 128) × 0.5
             0x001136,  // Battery Temperature              A − 40
+            0x00105F,  // Throttle Motor Duty              A × 100 / 255 − 50
         )
 
         /** FB25 NA verified TCU memory addresses (header 7E1). */
@@ -66,34 +76,76 @@ class ObdCapabilityProber @Inject constructor(
 
     // ── Capability probe ──────────────────────────────────────────────────────
 
-    /** Probes ECU (7E0) candidate addresses; returns the set that responded. Leaves header on 7E0. */
-    suspend fun probeEcuCapabilities(): Set<Int> {
-        val supported = probeModule("7E0", CANDIDATE_ECU_ADDRESSES)
-        Log.i(TAG, "ECU caps (${supported.size}): ${supported.toHexList()}")
-        return supported
+    /**
+     * Probes ECU (7E0) candidate addresses and returns an advisory state map.
+     * Leaves the CAN header on 7E0 after completion.
+     *
+     * The result is advisory — a UNSUPPORTED or UNKNOWN state never prevents polling.
+     */
+    suspend fun probeEcuCapabilities(): Map<Int, CapabilityState> {
+        Log.i(TAG, "Starting ECU capability probe (7E0), ${CANDIDATE_ECU_ADDRESSES.size} candidates")
+        val states = probeModule("7E0", CANDIDATE_ECU_ADDRESSES)
+        val supported   = states.values.count { it == CapabilityState.SUPPORTED }
+        val unsupported = states.values.count { it == CapabilityState.UNSUPPORTED }
+        val unknown     = states.values.count { it == CapabilityState.UNKNOWN }
+        Log.i(TAG, "ECU probe complete: $supported SUPPORTED, $unsupported UNSUPPORTED, $unknown UNKNOWN")
+        Log.d(TAG, "ECU advisory states: ${states.entries.joinToString { "0x%06X→%s".format(it.key, it.value) }}")
+        return states
     }
 
-    /** Probes TCU (7E1) candidate addresses; restores header to 7E0 afterwards. */
-    suspend fun probeTcuCapabilities(): Set<Int> {
-        val supported = probeModule("7E1", CANDIDATE_TCU_ADDRESSES)
+    /**
+     * Probes TCU (7E1) candidate addresses and returns an advisory state map.
+     * Restores the CAN header to 7E0 after completion.
+     *
+     * The result is advisory — a UNSUPPORTED or UNKNOWN state never prevents polling.
+     */
+    suspend fun probeTcuCapabilities(): Map<Int, CapabilityState> {
+        Log.i(TAG, "Starting TCU capability probe (7E1), ${CANDIDATE_TCU_ADDRESSES.size} candidates")
+        val states = probeModule("7E1", CANDIDATE_TCU_ADDRESSES)
         btManager.sendCommand("ATSH7E0", HEADER_TIMEOUT_MS)
-        Log.i(TAG, "TCU caps (${supported.size}): ${supported.toHexList()}")
-        return supported
+        Log.d(TAG, "CAN header restored to 7E0 after TCU probe")
+        val supported   = states.values.count { it == CapabilityState.SUPPORTED }
+        val unsupported = states.values.count { it == CapabilityState.UNSUPPORTED }
+        val unknown     = states.values.count { it == CapabilityState.UNKNOWN }
+        Log.i(TAG, "TCU probe complete: $supported SUPPORTED, $unsupported UNSUPPORTED, $unknown UNKNOWN")
+        Log.d(TAG, "TCU advisory states: ${states.entries.joinToString { "0x%06X→%s".format(it.key, it.value) }}")
+        return states
     }
 
-    private suspend fun probeModule(header: String, addresses: List<Int>): Set<Int> {
-        if (btManager.sendCommand("ATSH$header", HEADER_TIMEOUT_MS) == null) {
-            Log.w(TAG, "ATSH$header timed out — capability probe skipped")
-            return emptySet()
+    /**
+     * Probes each address in [addresses] under [header]. All addresses start as UNKNOWN;
+     * each transitions to SUPPORTED or UNSUPPORTED based on whether the A8 single-read
+     * returns a parseable response.
+     *
+     * If the ATSH command times out, all addresses remain UNKNOWN and the probe is
+     * considered skipped — polling continues regardless.
+     */
+    private suspend fun probeModule(header: String, addresses: List<Int>): Map<Int, CapabilityState> {
+        val states = LinkedHashMap<Int, CapabilityState>()
+        addresses.forEach { states[it] = CapabilityState.UNKNOWN }
+
+        val atshResp = btManager.sendCommand("ATSH$header", HEADER_TIMEOUT_MS)
+        if (atshResp == null) {
+            Log.w(TAG, "ATSH$header timed out — probe skipped, all ${addresses.size} addresses remain UNKNOWN")
+            Log.w(TAG, "Polling will proceed for all sensors despite UNKNOWN states (probe is advisory only)")
+            return states
         }
+        Log.d(TAG, "ATSH$header OK — settling ${SETTLE_MS}ms before probe sweep")
         delay(SETTLE_MS)
-        val supported = linkedSetOf<Int>()
+
         for (addr in addresses) {
-            val resp = btManager.sendCommand(buildSsmA8Single(addr), PROBE_TIMEOUT_MS)
-            if (resp != null && ObdParser.parseSsmResponse(resp) != null) supported += addr
+            val cmd  = buildSsmA8Single(addr)
+            val resp = btManager.sendCommand(cmd, PROBE_TIMEOUT_MS)
+            val state = if (resp != null && ObdParser.parseSsmResponse(resp) != null) {
+                CapabilityState.SUPPORTED
+            } else {
+                CapabilityState.UNSUPPORTED
+            }
+            states[addr] = state
+            Log.d(TAG, "Probe $header 0x%06X → $state (resp=${resp?.take(40)?.trim()})".format(addr))
             delay(PROBE_GAP_MS)
         }
-        return supported
+        return states
     }
 
     // ── Batch read ────────────────────────────────────────────────────────────
@@ -110,15 +162,19 @@ class ObdCapabilityProber @Inject constructor(
         if (addresses.isEmpty()) return BatchReadResult(emptyMap(), batchFailed = false)
 
         if (allowBatch && addresses.size > 1) {
-            val resp = btManager.sendCommand(buildSsmA8Batch(addresses), BATCH_TIMEOUT_MS)
+            val cmd  = buildSsmA8Batch(addresses)
+            Log.d(TAG, "A8 batch read: ${addresses.size} addresses, cmd=$cmd")
+            val resp = btManager.sendCommand(cmd, BATCH_TIMEOUT_MS)
             val parsed = parseSsmBatchResponse(resp, addresses)
             if (parsed.size == addresses.size) {
+                Log.d(TAG, "A8 batch OK: ${parsed.size} values received")
                 return BatchReadResult(parsed, batchFailed = false)
             }
-            Log.w(TAG, "A8 batch read returned ${parsed.size}/${addresses.size} bytes — falling back to single reads")
+            Log.w(TAG, "A8 batch returned ${parsed.size}/${addresses.size} bytes — falling back to single reads")
             return BatchReadResult(readSingles(addresses), batchFailed = true)
         }
 
+        Log.d(TAG, "A8 single-read mode: ${addresses.size} addresses")
         return BatchReadResult(readSingles(addresses), batchFailed = false)
     }
 
@@ -126,7 +182,13 @@ class ObdCapabilityProber @Inject constructor(
         val out = LinkedHashMap<Int, Int>()
         for (addr in addresses) {
             val resp = btManager.sendCommand(buildSsmA8Single(addr), SINGLE_TIMEOUT_MS) ?: continue
-            ObdParser.parseSsmResponse(resp)?.let { out[addr] = it }
+            val value = ObdParser.parseSsmResponse(resp)
+            if (value != null) {
+                out[addr] = value
+                Log.d(TAG, "Single A8 0x%06X → 0x%02X".format(addr, value))
+            } else {
+                Log.d(TAG, "Single A8 0x%06X → NO DATA".format(addr))
+            }
         }
         return out
     }
@@ -187,7 +249,4 @@ class ObdCapabilityProber @Inject constructor(
         }
         return result
     }
-
-    private fun Set<Int>.toHexList(): String =
-        joinToString(", ") { "0x%06X".format(it) }
 }

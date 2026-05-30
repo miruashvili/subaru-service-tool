@@ -43,7 +43,7 @@ class ObdQueryEngine @Inject constructor(
     private val _dtcCount = MutableStateFlow(0)
     val dtcCount: StateFlow<Int> = _dtcCount.asStateFlow()
 
-    // Number of SSM sensors detected by the capability probe (ECU + TCU).
+    // Number of SSM addresses confirmed SUPPORTED during the last capability probe (advisory).
     private val _detectedSensorCount = MutableStateFlow(0)
     val detectedSensorCount: StateFlow<Int> = _detectedSensorCount.asStateFlow()
 
@@ -84,9 +84,21 @@ class ObdQueryEngine @Inject constructor(
             queryDtcs()
 
             singleReadMode = userPreferences.adapterSingleRead.first()
+            Log.i(TAG, "Polling started — singleReadMode=$singleReadMode")
+
             val probeResult = loadOrRunProbe()
-            _detectedSensorCount.value = probeResult.ecuCaps.size + probeResult.tcuCaps.size
-            val activePids  = buildActivePidSet(probeResult)
+
+            // _detectedSensorCount is advisory — reflects how many SSM addresses actually
+            // responded during the probe, not how many sensors will be polled.
+            _detectedSensorCount.value =
+                probeResult.ecuStates.values.count { it == CapabilityState.SUPPORTED } +
+                probeResult.tcuStates.values.count { it == CapabilityState.SUPPORTED }
+            Log.i(TAG, "Advisory sensor count: ${_detectedSensorCount.value} " +
+                "(ECU: ${probeResult.ecuStates.values.count { it == CapabilityState.SUPPORTED }}, " +
+                "TCU: ${probeResult.tcuStates.values.count { it == CapabilityState.SUPPORTED }})")
+            Log.i(TAG, "Polling proceeds for ALL configured sensors regardless of advisory states")
+
+            val activePids = buildActivePidSet(probeResult)
 
             // Per-PID error/skip tracking
             val consecutiveErrors = mutableMapOf<String, Int>()
@@ -138,15 +150,15 @@ class ObdQueryEngine @Inject constructor(
                     (it.header == null || it.header == "7E0") &&
                     (it.ssmAddress == null || it == ObdPids.OIL_TEMP)
                 }
-                // ECU SSM addresses — read together in one A8 batch (gated by capability probe).
+                // ECU SSM addresses — ALL due ECU SSM PIDs are read together in one A8 batch.
+                // Capability probe state is advisory only — no address is excluded here.
                 val ecuSsmDue = due.filter {
-                    it.header == "7E0" && it.ssmAddress != null && it != ObdPids.OIL_TEMP &&
-                    isEcuAllowed(it.ssmAddress!!, probeResult)
+                    it.header == "7E0" && it.ssmAddress != null && it != ObdPids.OIL_TEMP
                 }
-                // TCU SSM addresses — A8 batch against header 7E1.
+                // TCU SSM addresses — ALL due TCU SSM PIDs are batched against header 7E1.
+                // Capability probe state is advisory only — no address is excluded here.
                 val tcuSsmDue = due.filter {
-                    it.header == "7E1" && it.ssmAddress != null &&
-                    isTcuAllowed(it.ssmAddress!!, probeResult)
+                    it.header == "7E1" && it.ssmAddress != null
                 }
                 // Remaining module PIDs (UDS Mode 22, header 7E1/7D4/…) — per-PID batch.
                 val moduleGroups = due
@@ -155,6 +167,21 @@ class ObdQueryEngine @Inject constructor(
                         (moduleSkipCycles[pid.header] ?: 0) == 0
                     }
                     .groupBy { it.header!! }
+
+                // Log advisory states for the ECU SSM batch (verbose — only when batch is non-empty)
+                if (ecuSsmDue.isNotEmpty()) {
+                    Log.d(TAG, "ECU SSM batch cycle=$cycle: " + ecuSsmDue.joinToString { pid ->
+                        val state = probeResult.ecuStates[pid.ssmAddress!!] ?: CapabilityState.UNKNOWN
+                        "${pid.name}[advisory=$state]"
+                    })
+                }
+                // Log advisory states for the TCU SSM batch
+                if (tcuSsmDue.isNotEmpty()) {
+                    Log.d(TAG, "TCU SSM batch cycle=$cycle: " + tcuSsmDue.joinToString { pid ->
+                        val state = probeResult.tcuStates[pid.ssmAddress!!] ?: CapabilityState.UNKNOWN
+                        "${pid.name}[advisory=$state]"
+                    })
+                }
 
                 // ── Standard OBD-II + oil temp ───────────────────────────────
                 for (pid in individualDue) {
@@ -175,10 +202,12 @@ class ObdQueryEngine @Inject constructor(
 
                         // IAT fallback: some adapters return NO DATA for 010F — try 0168
                         if (pid == ObdPids.INTAKE_TEMP && resolvedValue == null && isConnected()) {
+                            Log.d(TAG, "IAT 010F returned null — trying fallback 0168")
                             val fallback = btManager.sendCommand("0168", profile.commandTimeoutMs)
                             if (fallback != null) {
                                 resolvedValue = ObdParser.parseStandard(fallback, "0168")
                                     ?.let { bytes -> if (bytes.size >= 2) (bytes[1] - 40).toFloat() else null }
+                                Log.d(TAG, "IAT fallback 0168 → $resolvedValue")
                             }
                         }
                         trackResult(pid, resolvedValue, current, consecutiveErrors, skipCycles)
@@ -188,6 +217,7 @@ class ObdQueryEngine @Inject constructor(
 
                 // ── ECU SSM batch (header 7E0, already selected) ─────────────
                 if (ecuSsmDue.isNotEmpty() && isConnected()) {
+                    Log.d(TAG, "ECU SSM batch: ${ecuSsmDue.size} PIDs")
                     val ok = batchSsm(null, ecuSsmDue, current, consecutiveErrors, skipCycles, profile)
                     consecutiveTimeouts = if (ok) 0 else consecutiveTimeouts + 1
                 }
@@ -195,14 +225,20 @@ class ObdQueryEngine @Inject constructor(
                 // ── TCU SSM batch (header 7E1, restore 7E0) ──────────────────
                 if (tcuSsmDue.isNotEmpty() && isConnected() &&
                     (moduleSkipCycles["7E1"] ?: 0) == 0) {
+                    Log.d(TAG, "TCU SSM batch: ${tcuSsmDue.size} PIDs (advisory TCU states: " +
+                        "${probeResult.tcuStates.values.count { it == CapabilityState.SUPPORTED }} SUPPORTED, " +
+                        "${probeResult.tcuStates.values.count { it == CapabilityState.UNKNOWN }} UNKNOWN)")
                     val ok = batchSsm("7E1", tcuSsmDue, current, consecutiveErrors, skipCycles, profile)
                     if (!ok) registerModuleFailure("7E1", moduleFailures, moduleSkipCycles)
                     else moduleFailures.remove("7E1")
+                } else if (tcuSsmDue.isNotEmpty() && (moduleSkipCycles["7E1"] ?: 0) > 0) {
+                    Log.d(TAG, "TCU SSM batch skipped: 7E1 in error back-off for ${moduleSkipCycles["7E1"]} more cycles")
                 }
 
                 // ── Remaining module batches (UDS Mode 22) ───────────────────
                 for ((header, pids) in moduleGroups) {
                     if (pids.isEmpty() || !isConnected()) continue
+                    Log.d(TAG, "Module batch header=$header: ${pids.size} PIDs")
                     val ok = batchQueryModule(header, pids, profile, current, consecutiveErrors, skipCycles)
                     if (!ok) {
                         consecutiveTimeouts++
@@ -231,6 +267,7 @@ class ObdQueryEngine @Inject constructor(
                 if (baselineCycleTime >= 0) {
                     when {
                         cycleTime > baselineCycleTime * 2 -> {
+                            Log.w(TAG, "Cycle ${cycleTime}ms > 2× baseline ${baselineCycleTime}ms — downgrading profile")
                             btManager.downgradeProfile()
                             fastCycleCount = 0
                             baselineCycleTime = -1L
@@ -239,6 +276,7 @@ class ObdQueryEngine @Inject constructor(
                         cycleTime <= baselineCycleTime -> {
                             fastCycleCount++
                             if (fastCycleCount >= 5) {
+                                Log.d(TAG, "5 consecutive fast cycles — upgrading profile")
                                 btManager.upgradeProfile()
                                 fastCycleCount = 0
                                 baselineCycleTime = -1L
@@ -261,6 +299,7 @@ class ObdQueryEngine @Inject constructor(
         _sensorValues.value = emptyMap()
         _dtcCount.value = 0
         cachedProbe = null
+        Log.i(TAG, "Polling stopped — sensor map cleared")
     }
 
     private fun registerModuleFailure(
@@ -271,82 +310,153 @@ class ObdQueryEngine @Inject constructor(
         val fails = (moduleFailures[header] ?: 0) + 1
         moduleFailures[header] = fails
         if (fails >= MODULE_FAIL_THRESHOLD) {
-            Log.w(TAG, "Module $header failed $fails times — skipping for $MODULE_SKIP_CYCLES cycles")
+            Log.w(TAG, "Module $header failed $fails times — suspending for $MODULE_SKIP_CYCLES cycles")
+            Log.w(TAG, "Note: module suspension is runtime error recovery, not capability gating")
             moduleSkipCycles[header] = MODULE_SKIP_CYCLES
+        } else {
+            Log.d(TAG, "Module $header failure count: $fails/$MODULE_FAIL_THRESHOLD")
         }
     }
 
     // ── Capability + sensor probe ─────────────────────────────────────────────
 
+    /**
+     * Returns cached probe result if available, otherwise runs the full probe sequence.
+     * The result is **advisory only** — it is used for logging, metrics, and oil-temp
+     * source routing. It never gates which sensors are polled.
+     */
     private suspend fun loadOrRunProbe(): ProbeResult {
-        cachedProbe?.let { return it }
+        cachedProbe?.let {
+            Log.d(TAG, "In-memory probe cache hit")
+            return it
+        }
 
-        // null = never probed on this install; non-null (incl. "") = cached result.
         val storedCaps = userPreferences.ecuCaps.first()
         if (storedCaps != null) {
-            val ecu = parseCaps(storedCaps)
-            val tcu = parseCaps(userPreferences.tcuCaps.first() ?: "")
+            val ecuStates = parseCapsToStates(storedCaps, ObdCapabilityProber.CANDIDATE_ECU_ADDRESSES)
+            val tcuStates = parseCapsToStates(
+                userPreferences.tcuCaps.first(),
+                ObdCapabilityProber.CANDIDATE_TCU_ADDRESSES,
+            )
             val src = runCatching {
                 OilTempSource.valueOf(userPreferences.probeOilTempSource.first())
             }.getOrDefault(OilTempSource.NONE)
-            Log.d(TAG, "Probe cache hit: oil=$src ecuCaps=${ecu.size} tcuCaps=${tcu.size}")
-            return ProbeResult(src, ecu, tcu).also { cachedProbe = it }
+
+            val ecuSupported = ecuStates.values.count { it == CapabilityState.SUPPORTED }
+            val tcuSupported = tcuStates.values.count { it == CapabilityState.SUPPORTED }
+            Log.i(TAG, "DataStore probe cache hit: oil=$src ecuSupported=$ecuSupported tcuSupported=$tcuSupported")
+            Log.d(TAG, "ECU advisory: ${ecuStates.entries.joinToString { "0x%06X→%s".format(it.key, it.value) }}")
+            Log.d(TAG, "TCU advisory: ${tcuStates.entries.joinToString { "0x%06X→%s".format(it.key, it.value) }}")
+            Log.i(TAG, "All sensors will be polled regardless of advisory states")
+
+            return ProbeResult(src, ecuStates, tcuStates).also { cachedProbe = it }
         }
 
+        Log.i(TAG, "No probe cache found — running full capability probe (advisory mode)")
         return runProbe().also {
             cachedProbe = it
-            userPreferences.saveCapabilities(serializeCaps(it.ecuCaps), serializeCaps(it.tcuCaps))
-            userPreferences.saveSensorProbe(it.oilTempSource.name, it.tcuCaps.isNotEmpty())
-            Log.i(TAG, "Probe complete: oil=${it.oilTempSource} ecuCaps=${it.ecuCaps.size} tcuCaps=${it.tcuCaps.size}")
+            userPreferences.saveCapabilities(serializeCaps(it.ecuStates), serializeCaps(it.tcuStates))
+            userPreferences.saveSensorProbe(
+                it.oilTempSource.name,
+                it.tcuStates.values.any { s -> s == CapabilityState.SUPPORTED },
+            )
+            val ecuSupported = it.ecuStates.values.count { s -> s == CapabilityState.SUPPORTED }
+            val tcuSupported = it.tcuStates.values.count { s -> s == CapabilityState.SUPPORTED }
+            Log.i(TAG, "Probe saved: oil=${it.oilTempSource} ecuSupported=$ecuSupported tcuSupported=$tcuSupported")
+            Log.i(TAG, "Advisory probe complete — all sensors proceed to polling")
         }
     }
 
     private suspend fun runProbe(): ProbeResult {
-        // 1. ECU capability bitmap (leaves header on 7E0)
-        val ecuCaps = capabilityProber.probeEcuCapabilities()
-        // 2. Oil-temp physical source (depends on ECU caps for the SSM_ECU case)
-        val oilTempSource = probeOilTempSource(ecuCaps)
-        // 3. TCU capability bitmap (restores header to 7E0)
-        val tcuCaps = capabilityProber.probeTcuCapabilities()
-        return ProbeResult(oilTempSource, ecuCaps, tcuCaps)
+        Log.i(TAG, "=== Capability probe START (advisory mode — no sensors will be disabled) ===")
+        val ecuStates     = capabilityProber.probeEcuCapabilities()
+        val oilTempSource = probeOilTempSource(ecuStates)
+        val tcuStates     = capabilityProber.probeTcuCapabilities()
+        Log.i(TAG, "=== Capability probe END: oil=$oilTempSource " +
+            "ecuStates=${ecuStates.size} tcuStates=${tcuStates.size} ===")
+        return ProbeResult(oilTempSource, ecuStates, tcuStates)
     }
 
-    /** Resolves where engine oil temperature actually comes from on this vehicle. */
-    private suspend fun probeOilTempSource(ecuCaps: Set<Int>): OilTempSource {
-        // Standard OBD-II Mode 01 PID 5C takes priority when present.
+    /**
+     * Resolves which physical source to use for engine oil temperature.
+     * The [ecuStates] map is advisory — an UNSUPPORTED or UNKNOWN state does not prevent
+     * trying the source; it only informs routing priority.
+     *
+     * Priority: OBD_STANDARD (015C) → SSM_ECU (0x0000AF) → SSM_ECU_ALT (0x009D5C) → NONE.
+     * When NONE is returned, the polling engine defaults to SSM_ECU (0x0000AF) and lets
+     * the runtime error tracker determine actual support.
+     */
+    private suspend fun probeOilTempSource(ecuStates: Map<Int, CapabilityState>): OilTempSource {
+        Log.d(TAG, "Probing oil temp source...")
+
         val stdResp = btManager.sendCommand("015C", SSM_TIMEOUT_MS)
         if (stdResp != null && ObdParser.parseStandard(stdResp, "015C")?.isNotEmpty() == true) {
-            Log.d(TAG, "Oil temp source → OBD_STANDARD (015C)")
+            Log.i(TAG, "Oil temp source → OBD_STANDARD (015C)")
             return OilTempSource.OBD_STANDARD
         }
-        // SSM address 0x0000AF — already probed in the capability sweep.
-        if (0x0000AF in ecuCaps) {
-            Log.d(TAG, "Oil temp source → SSM_ECU (0x0000AF)")
+        Log.d(TAG, "015C: no data (resp=${stdResp?.take(30)?.trim()})")
+
+        val afState = ecuStates[0x0000AF] ?: CapabilityState.UNKNOWN
+        Log.d(TAG, "0x0000AF advisory state: $afState")
+        if (afState == CapabilityState.SUPPORTED || afState == CapabilityState.UNKNOWN) {
+            Log.i(TAG, "Oil temp source → SSM_ECU (0x0000AF) [advisory=$afState]")
             return OilTempSource.SSM_ECU
         }
-        // SSM alternate address 0x009D5C (not in the candidate sweep).
+
+        Log.d(TAG, "0x0000AF is UNSUPPORTED (advisory) — trying alternate address 0x009D5C")
         val altResp = btManager.sendCommand(capabilityProber.buildSsmA8Single(0x009D5C), SSM_TIMEOUT_MS)
         if (altResp != null && ObdParser.parseSsmResponse(altResp) != null) {
-            Log.d(TAG, "Oil temp source → SSM_ECU_ALT (0x009D5C)")
+            Log.i(TAG, "Oil temp source → SSM_ECU_ALT (0x009D5C)")
             return OilTempSource.SSM_ECU_ALT
         }
+        Log.d(TAG, "0x009D5C: no data (resp=${altResp?.take(30)?.trim()})")
+
+        Log.i(TAG, "Oil temp source → NONE (probe inconclusive for all sources)")
+        Log.i(TAG, "OIL_TEMP will still be polled — engine defaults to SSM_ECU (0x0000AF)")
         return OilTempSource.NONE
     }
 
-    private fun isEcuAllowed(address: Int, probe: ProbeResult): Boolean =
-        probe.ecuCaps.isEmpty() || address in probe.ecuCaps
+    // ── Capability state deserialization ──────────────────────────────────────
 
-    private fun isTcuAllowed(address: Int, probe: ProbeResult): Boolean =
-        probe.tcuCaps.isNotEmpty() && address in probe.tcuCaps
+    /**
+     * Reconstructs an advisory [Map<Int, CapabilityState>] from the serialised DataStore string.
+     *
+     *  - [raw] == null → never probed → all [candidates] assigned UNKNOWN
+     *  - [raw] != null → addresses present in [raw] → SUPPORTED; all others → UNSUPPORTED
+     *
+     * The DataStore format is unchanged (comma-separated hex addresses of SUPPORTED entries).
+     */
+    private fun parseCapsToStates(raw: String?, candidates: List<Int>): Map<Int, CapabilityState> {
+        if (raw == null) {
+            Log.d(TAG, "parseCapsToStates: raw=null → all ${candidates.size} candidates UNKNOWN")
+            return candidates.associateWith { CapabilityState.UNKNOWN }
+        }
+        val supported = raw.split(",")
+            .mapNotNull { it.trim().takeIf(String::isNotEmpty)?.toIntOrNull(16) }
+            .toSet()
+        return candidates.associateWith { addr ->
+            if (addr in supported) CapabilityState.SUPPORTED else CapabilityState.UNSUPPORTED
+        }
+    }
 
-    private fun parseCaps(raw: String): Set<Int> =
-        raw.split(",").mapNotNull { it.trim().takeIf { t -> t.isNotEmpty() }?.toIntOrNull(16) }.toSet()
-
-    private fun serializeCaps(caps: Set<Int>): String =
-        caps.joinToString(",") { "%X".format(it) }
+    /** Serialises only SUPPORTED addresses to the existing comma-separated hex format. */
+    private fun serializeCaps(states: Map<Int, CapabilityState>): String =
+        states.entries
+            .filter { it.value == CapabilityState.SUPPORTED }
+            .joinToString(",") { "%X".format(it.key) }
 
     // ── Active PID set ────────────────────────────────────────────────────────
 
+    /**
+     * Builds the set of PIDs to poll this session.
+     *
+     * Capability probe results are NOT used to exclude any PID. The only filters applied are:
+     *   1. Vehicle type (isTurboOnly flag) — turbo-only PIDs are excluded for NA engines.
+     *   2. User gauge slot configuration — TIER2/3/4 PIDs not in any configured slot are excluded.
+     *
+     * TIER1, OIL_TEMP, CVT_TEMP, AWD_DUTY, AMBIENT_TEMP, MAF, and INTAKE_TEMP are always
+     * included regardless of probe state or gauge configuration.
+     */
     private suspend fun buildActivePidSet(probe: ProbeResult): Set<ObdPid> {
         val allCmds = mutableSetOf<String>()
         allCmds += userPreferences.gaugeSlots.first()
@@ -359,33 +469,58 @@ class ObdQueryEngine @Inject constructor(
 
         val vehicle = userPreferences.selectedVehicle.first()
         val isTurbo = vehicle?.isTurbo ?: true
-        val tcuAvailable = probe.tcuCaps.isNotEmpty()
 
         val active = mutableSetOf<ObdPid>()
 
+        // TIER1 — always polled every cycle
         active += ObdPids.TIER1
+        Log.d(TAG, "buildActivePidSet: added TIER1 (${ObdPids.TIER1.size} PIDs, always on)")
+
+        // Core sensors — always included regardless of probe or gauge config
         active += ObdPids.AMBIENT_TEMP
         active += ObdPids.MAF
         active += ObdPids.INTAKE_TEMP
 
-        if (probe.oilTempSource != OilTempSource.NONE) active += ObdPids.OIL_TEMP
-        if (tcuAvailable) {
-            active += ObdPids.CVT_TEMP
-            active += ObdPids.AWD_DUTY
+        // OIL_TEMP — always included; probe result is advisory for routing only, not a gate
+        active += ObdPids.OIL_TEMP
+        Log.d(TAG, "buildActivePidSet: OIL_TEMP always included — " +
+            "advisory source=${probe.oilTempSource} " +
+            "(0x0000AF=${probe.ecuStates[0x0000AF] ?: CapabilityState.UNKNOWN})")
+
+        // CVT_TEMP + AWD_DUTY — always included; TCU probe result is advisory only
+        active += ObdPids.CVT_TEMP
+        active += ObdPids.AWD_DUTY
+        val tcuUnknown    = probe.tcuStates.values.count { it == CapabilityState.UNKNOWN }
+        val tcuSupported  = probe.tcuStates.values.count { it == CapabilityState.SUPPORTED }
+        val tcuUnsupported = probe.tcuStates.values.count { it == CapabilityState.UNSUPPORTED }
+        Log.d(TAG, "buildActivePidSet: CVT_TEMP + AWD_DUTY always included — " +
+            "TCU advisory: $tcuSupported SUPPORTED, $tcuUnsupported UNSUPPORTED, $tcuUnknown UNKNOWN")
+
+        if ("TPMS_ALL" in allCmds) {
+            active += ObdPids.TIER4
+            Log.d(TAG, "buildActivePidSet: TPMS_ALL in slots — added TIER4 (${ObdPids.TIER4.size} PIDs)")
         }
 
-        if ("TPMS_ALL" in allCmds) active += ObdPids.TIER4
-
+        // TIER2/3/4 — filtered only by vehicle type (isTurboOnly), never by capability state
         val candidates = (ObdPids.TIER2 + ObdPids.TIER3 + ObdPids.TIER4)
             .filter { !it.isTurboOnly || isTurbo }
-            .filter { tcuAvailable || it.header != "7E1" }
+        // Note: TCU header filter has been removed — TCU PIDs are included whenever
+        // the user places them in a gauge slot, regardless of probe state.
+
+        var addedFromSlots = 0
         for (pid in candidates) {
-            if (pid.cmd in allCmds) active += pid
+            if (pid.cmd in allCmds) {
+                active += pid
+                addedFromSlots++
+            }
         }
+        Log.d(TAG, "buildActivePidSet: $addedFromSlots PIDs added from gauge slots " +
+            "(isTurbo=$isTurbo, candidates=${candidates.size})")
 
         active += _carActivePids.value
 
-        Log.d(TAG, "Active PIDs: ${active.joinToString { it.name }}")
+        Log.i(TAG, "buildActivePidSet COMPLETE: ${active.size} PIDs — " +
+            active.joinToString { it.name })
         return active
     }
 
@@ -401,6 +536,7 @@ class ObdQueryEngine @Inject constructor(
         if (pid == ObdPids.OIL_TEMP) {
             return when (probe.oilTempSource) {
                 OilTempSource.OBD_STANDARD -> {
+                    Log.d(TAG, "OIL_TEMP query: OBD_STANDARD (015C)")
                     val resp = btManager.sendCommand("015C", timeout)
                     val v = resp?.let {
                         ObdParser.parseStandard(it, "015C")
@@ -409,14 +545,27 @@ class ObdQueryEngine @Inject constructor(
                     resp to v
                 }
                 OilTempSource.SSM_ECU -> {
+                    val state = probe.ecuStates[0x0000AF] ?: CapabilityState.UNKNOWN
+                    Log.d(TAG, "OIL_TEMP query: SSM_ECU (0x0000AF) [advisory=$state]")
                     val resp = btManager.sendCommand(capabilityProber.buildSsmA8Single(0x0000AF), timeout)
                     resp to resp?.let { parsePid(pid, it) }
                 }
                 OilTempSource.SSM_ECU_ALT -> {
+                    Log.d(TAG, "OIL_TEMP query: SSM_ECU_ALT (0x009D5C)")
                     val resp = btManager.sendCommand(capabilityProber.buildSsmA8Single(0x009D5C), timeout)
                     resp to resp?.let { parsePid(pid, it) }
                 }
-                OilTempSource.NONE -> null to null
+                OilTempSource.NONE -> {
+                    // Probe was inconclusive — default to SSM_ECU (0x0000AF).
+                    // If the ECU doesn't support it, the runtime skip tracker handles it
+                    // after 3 consecutive NO DATA responses.
+                    val state = probe.ecuStates[0x0000AF] ?: CapabilityState.UNKNOWN
+                    Log.d(TAG, "OIL_TEMP query: source advisory NONE — " +
+                        "defaulting to SSM_ECU (0x0000AF) [advisory=$state]; " +
+                        "runtime error tracker will suppress after 3 failures")
+                    val resp = btManager.sendCommand(capabilityProber.buildSsmA8Single(0x0000AF), timeout)
+                    resp to resp?.let { parsePid(pid, it) }
+                }
             }
         }
 
@@ -450,17 +599,23 @@ class ObdQueryEngine @Inject constructor(
         }
 
         val addresses = pids.map { it.ssmAddress!! }
+        Log.d(TAG, "batchSsm header=${header ?: "7E0(current)"} addresses=${addresses.size} singleReadMode=$singleReadMode")
         val result = capabilityProber.readSsmBatch(addresses, allowBatch = !singleReadMode)
 
         if (result.batchFailed && !singleReadMode) {
             singleReadMode = true
             userPreferences.setAdapterSingleRead(true)
-            Log.i(TAG, "Adapter can't batch A8 reads — switching to single-read mode")
+            Log.i(TAG, "Adapter can't batch A8 reads — switching to single-read mode (persisted)")
         }
 
         for (pid in pids) {
-            val raw = result.values[pid.ssmAddress]
+            val raw   = result.values[pid.ssmAddress]
             val value = raw?.let { pid.parse(listOf(it)) }
+            if (raw != null) {
+                Log.d(TAG, "batchSsm ${pid.name} (0x%06X) raw=0x%02X value=$value".format(pid.ssmAddress, raw))
+            } else {
+                Log.d(TAG, "batchSsm ${pid.name} (0x%06X) → no data".format(pid.ssmAddress!!))
+            }
             trackResult(pid, value, current, consecutiveErrors, skipCycles)
         }
 
@@ -490,11 +645,16 @@ class ObdQueryEngine @Inject constructor(
             if (!isConnected()) break
             var response = btManager.sendCommand(pid.cmd, SSM_TIMEOUT_MS)
             if (response == null) {
+                Log.d(TAG, "Module ${pid.name} timeout — retrying once")
                 delay(500L)
                 response = btManager.sendCommand(pid.cmd, SSM_TIMEOUT_MS)
             }
-            if (response == null) continue
+            if (response == null) {
+                Log.d(TAG, "Module ${pid.name} no response after retry")
+                continue
+            }
             val value = ObdParser.parseUdsResponse(response, pid.cmd)?.let { pid.parse(it) }
+            Log.d(TAG, "Module $header ${pid.name} → value=$value")
             trackResult(pid, value, current, consecutiveErrors, skipCycles)
             anyRead = true
             if (profile.delayBetweenPidsMs > 0L) delay(profile.delayBetweenPidsMs)
@@ -535,13 +695,19 @@ class ObdQueryEngine @Inject constructor(
             if (errors >= 3) {
                 val skipFor = when {
                     pid.ssmAddress != null -> {
-                        Log.i(TAG, "Sensor ${pid.name} not supported on this ECU — stopped polling")
+                        Log.i(TAG, "Sensor ${pid.name} (SSM 0x%06X) not responding after 3 attempts — ".format(pid.ssmAddress) +
+                            "suspending for session (runtime, not capability gate)")
                         9999
                     }
-                    pid.header != null && pid.header != "7E0" -> MODULE_SKIP_CYCLES
-                    else -> 10
+                    pid.header != null && pid.header != "7E0" -> {
+                        Log.d(TAG, "Sensor ${pid.name} module PID not responding — suspending $MODULE_SKIP_CYCLES cycles")
+                        MODULE_SKIP_CYCLES
+                    }
+                    else -> {
+                        Log.d(TAG, "Sensor ${pid.name} not responding — suspending 10 cycles")
+                        10
+                    }
                 }
-                Log.d(TAG, "Skipping ${pid.name} for $skipFor cycles after 3 consecutive NO DATA")
                 skipCycles[pid.cmd] = skipFor
             }
         }
@@ -567,9 +733,15 @@ class ObdQueryEngine @Inject constructor(
         btManager.connectionState.value is BluetoothConnectionState.Connected
 }
 
-/** Cached result of the first-connect capability + sensor probe. */
+/**
+ * Cached result of the first-connect capability + sensor probe.
+ *
+ * Both [ecuStates] and [tcuStates] are advisory maps — the polling engine
+ * logs them and uses them for oil-temp source routing only.
+ * They never gate which sensors are included in a poll cycle.
+ */
 private data class ProbeResult(
     val oilTempSource: OilTempSource,
-    val ecuCaps: Set<Int>,
-    val tcuCaps: Set<Int>,
+    val ecuStates: Map<Int, CapabilityState>,
+    val tcuStates: Map<Int, CapabilityState>,
 )

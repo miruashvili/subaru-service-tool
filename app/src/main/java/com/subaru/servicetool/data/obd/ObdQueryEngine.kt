@@ -3,6 +3,7 @@ package com.subaru.servicetool.data.obd
 import android.util.Log
 import com.subaru.servicetool.data.bluetooth.BluetoothConnectionState
 import com.subaru.servicetool.data.bluetooth.OBDBluetoothManager
+import com.subaru.servicetool.data.obd.discovery.ModuleDiscoveryService
 import com.subaru.servicetool.data.obd.polling.AwdPoller
 import com.subaru.servicetool.data.obd.polling.CvtPoller
 import com.subaru.servicetool.data.obd.polling.EnginePoller
@@ -53,6 +54,7 @@ class ObdQueryEngine @Inject constructor(
     private val userPreferences: UserPreferences,
     private val capabilityProber: ObdCapabilityProber,
     private val sensorRegistry: SensorRegistry,
+    private val moduleDiscovery: ModuleDiscoveryService,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -68,6 +70,9 @@ class ObdQueryEngine @Inject constructor(
 
     private val _carActivePids = MutableStateFlow<Set<ObdPid>>(emptySet())
     fun setCarActivePids(pids: Set<ObdPid>) { _carActivePids.value = pids }
+
+    /** Live runtime module map from [ModuleDiscoveryService]. Populated after first connect. */
+    val discoveredModules get() = moduleDiscovery.modules
 
     private var pollJob: Job? = null
     private var cachedSnapshot: CapabilitySnapshot? = null
@@ -133,6 +138,14 @@ class ObdQueryEngine @Inject constructor(
                 snapshot.tcuStates.values.count { it == CapabilityState.SUPPORTED }
             Log.i(TAG, "Advisory detected sensors: ${_detectedSensorCount.value}")
 
+            // ── Module discovery ── runs before pollers so headers are uncontested ──
+            Log.i(TAG, "Running module discovery (sequential, before pollers start)")
+            try {
+                moduleDiscovery.discover()
+            } catch (e: Exception) {
+                Log.e(TAG, "Module discovery failed — pollers will start regardless: ${e.message}", e)
+            }
+
             val vehicle = userPreferences.selectedVehicle.first()
             val isTurbo = vehicle?.isTurbo ?: true
             val carPids = _carActivePids.value
@@ -193,7 +206,8 @@ class ObdQueryEngine @Inject constructor(
         _dtcCount.value = 0
         cachedSnapshot = null
         sensorRegistry.reset()
-        Log.i(TAG, "Polling stopped — all pollers cancelled, registry reset to UNKNOWN")
+        moduleDiscovery.reset()
+        Log.i(TAG, "Polling stopped — all pollers cancelled, registries reset")
     }
 
     // ── Capability snapshot ───────────────────────────────────────────────────
